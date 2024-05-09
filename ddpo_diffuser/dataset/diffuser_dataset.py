@@ -1,33 +1,28 @@
 import torch
 import os
 import numpy as np
+from ddpo_diffuser.utils.normlization import GaussianNormalizer, MaxMinNormlizer
 
 
 class DeciDiffuserDataset:
     """Implementation of DecisionDiffuser dataset."""
 
     def __init__(
-        self,
-        dataset_name: str,
-        batch_size: int = 256,
-        gpu_threshold: int = 1024,
-        device: torch.device = torch.device('cpu'),
-        horizon: int = 64,
-        discount: float = 0.99,
-        # returns_scale: int = 1000,
-        include_returns: bool = True,
-        include_constraints: bool = True,
-        include_skills: bool = True,
+            self,
+            dataset_name: str,
+            batch_size: int = 256,
+            gpu_threshold: int = 1024,
+            device: torch.device = torch.device('cpu'),
+            horizon: int = 64,
+            discount: float = 0.99,
+            # returns_scale: int = 1000,
+            include_returns: bool = True,
+            include_constraints: bool = False,
+            include_skills: bool = False,
     ) -> None:
         """Initialize for Class DeciDiffuserDataset."""
-        # super().__init__(
-        #     dataset_name=dataset_name,
-        #     batch_size=batch_size,
-        #     gpu_threshold=gpu_threshold,
-        #     device=device,
-        # )
 
-        self._default_datasets_dir = './datasets/'
+        self._default_datasets_dir = './dataset/datasets'
         file_path = os.path.join(self._default_datasets_dir, f'{dataset_name}.npz')
         data = np.load(file_path)
         self._batch_size = batch_size
@@ -40,36 +35,48 @@ class DeciDiffuserDataset:
         self._device = device
         self._length = len(self.obs)
 
-        if self._name_to_metadata[dataset_name].episode_length is None:
-            self.episode_length = torch.where(self.done == 1)[0][0].item() + 1
-        else:
-            self.episode_length = self._name_to_metadata[dataset_name].episode_length
+        self.episode_length = 1000
         self.num_trajs = len(self.obs) // self.episode_length
         assert horizon <= self.episode_length, 'Horizon is not allowed large than episode length.'
         self.horizon = horizon
         self.discount = discount
-        self.discounts = self.discount ** torch.arange(self.episode_length, device=device)
+        # self.discounts = self.discount ** torch.arange(self.episode_length, device=device)
         self.include_returns = include_returns
         # self.returns_scale = returns_scale
         self.include_constraints = include_constraints
         self.include_skills = include_skills
-        rewards = self.reward.view(-1, self.episode_length)
-        returns = torch.zeros_like(rewards)
-        # self.returns = (self.reward * self.discounts.repeat(self.num_trajs)).view(-1, self.episode_length)
-        # for i in range(rewards.shape[0]):
-        for start in range(rewards.shape[1]):
-            returns[:, start] = (
-                rewards[:, start:] * self.discounts[: (self.episode_length - start)]
-            ).sum(dim=1)
-        self.returns = returns.view(-1)
-        self.returns_scale = self.returns.max() - self.returns.min()
-        self.returns = 2 * (self.returns - self.returns.min()) / self.returns_scale - 1
+        self.normalizer = GaussianNormalizer(self.obs)
+        # Normalize Returns
+        self.obs = self.normalizer.normalize(self.obs)
+
+        self.reward_normalizer = GaussianNormalizer(self.reward.view(-1,1))
+        self.reward = self.reward_normalizer.normalize(self.reward.view(-1,1))
+        self.discounts = (self.discount ** torch.arange(self.horizon)).to(device)
+        self.return_max = (self.reward.max()*self.discounts).sum()
+
+        # return_scale = self.returns.max() - min
+        # self.norm_returns = ((self.returns - min) / return_scale) * 2 - 1
 
     def get_returns(self, indices: torch.Tensor) -> torch.Tensor:
         """Get returns tensor for training."""
-        return self.returns[indices].view(-1, 1)
+        returns = ((self.reward[indices].view(-1, self.horizon) * self.discounts).sum(dim=-1) / self.return_max).view(-1,
+                                                                                                                    1)
+        # return self.norm_returns[indices].view(-1, 1)
         # return self.reward[indices].view(-1, self.horizon, 1).mean(dim=1)
+        return returns
 
+    # def cal_returns(self):
+    #     rewards = self.reward.view(-1, self.episode_length)
+    #     returns = torch.zeros_like(rewards)
+    #     # self.returns = (self.reward * self.discounts.repeat(self.num_trajs)).view(-1, self.episode_length)
+    #     # for i in range(rewards.shape[0]):
+    #     for start in range(rewards.shape[1]):
+    #         returns[:, start] = (
+    #                 rewards[:, start:] * self.discounts[: (self.episode_length - start)]
+    #         ).sum(dim=1)
+    #     self.returns = returns.view(-1)
+    #     self.returns_scale = self.returns.max() - self.returns.min()
+    #     self.returns = 2 * (self.returns - self.returns.min()) / self.returns_scale - 1
 
     def get_constraints(self, indices: torch.Tensor) -> torch.Tensor:
         """Get constraints tensor for training."""
@@ -86,7 +93,7 @@ class DeciDiffuserDataset:
         return self.skill[indices].view(-1, 2)
 
     def sample(
-        self,
+            self,
     ) -> tuple:
         """Sample a batch of data from the dataset."""
         # indices = torch.randint(low=0, high=len(self), size=(self._batch_size,), dtype=torch.int64)
@@ -124,3 +131,14 @@ class DeciDiffuserDataset:
             sample_batch.append(self.get_skills(indices_start))
 
         return tuple(sample_batch)
+
+
+if __name__ == "__main__":
+    task = 'walker2d_full_replay-v2'
+    dataset = DeciDiffuserDataset(dataset_name=task,
+                                  include_skills=False,
+                                  include_constraints=False,
+                                  device=torch.device('cuda:0')
+                                  )
+    sample = dataset.sample()
+    print("ok")

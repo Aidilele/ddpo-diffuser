@@ -13,13 +13,13 @@ class GaussianNormalizer():
         return x * self.std[None,] + self.mean[None,]
 
 
-class MaxMinNormlizer():
+class MaxMinNormalizer():
     def __init__(self, x: torch.Tensor):
         self.min = x.min()
         self.scale = x.max() - x.min()
 
     def normalize(self, x: torch.Tensor):
-        return (x - self.min[None,]) / self.scale[None,]
+        return (2*(x - self.min[None,]) / self.scale[None,])-1
 
     def unnormalize(self, x: torch.Tensor):
-        return x * self.scale[None,] + self.min[None,]
+        return ((x+1)/2)*self.scale[None,]+self.min[None,]

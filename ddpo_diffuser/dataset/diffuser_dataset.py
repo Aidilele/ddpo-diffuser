@@ -1,7 +1,7 @@
 import torch
 import os
 import numpy as np
-from ddpo_diffuser.utils.normlization import GaussianNormalizer, MaxMinNormlizer
+from ddpo_diffuser.utils.normlization import GaussianNormalizer, MaxMinNormalizer
 
 
 class DeciDiffuserDataset:
@@ -49,7 +49,7 @@ class DeciDiffuserDataset:
         # Normalize Returns
         self.obs = self.normalizer.normalize(self.obs)
 
-        self.reward_normalizer = GaussianNormalizer(self.reward.view(-1,1))
+        self.reward_normalizer = MaxMinNormalizer(self.reward.view(-1,1))
         self.reward = self.reward_normalizer.normalize(self.reward.view(-1,1))
         self.discounts = (self.discount ** torch.arange(self.horizon)).to(device)
         self.return_max = (self.reward.max()*self.discounts).sum()

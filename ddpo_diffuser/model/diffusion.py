@@ -27,21 +27,21 @@ class GaussianInvDynDiffusion(nn.Module):
     """Implementation of GaussianInvDynDiffusion."""
 
     def __init__(
-        self,
-        model: nn.Module,
-        horizon: int,
-        observation_dim: int,
-        action_dim: int,
-        n_timesteps: int = 1000,
-        clip_denoised: float = False,
-        predict_epsilon: float = True,
-        hidden_dim: int = 256,
-        loss_discount: float = 1.0,
-        returns_condition: bool = False,
-        condition_guidance_w: float = 0.1,
-        train_only_inv: bool = False,
-        history_length: int = 1,
-        multi_step_pred: int = 1,
+            self,
+            model: nn.Module,
+            horizon: int,
+            observation_dim: int,
+            action_dim: int,
+            n_timesteps: int = 1000,
+            clip_denoised: float = False,
+            predict_epsilon: float = True,
+            hidden_dim: int = 256,
+            loss_discount: float = 1.0,
+            returns_condition: bool = False,
+            condition_guidance_w: float = 0.1,
+            train_only_inv: bool = False,
+            history_length: int = 1,
+            multi_step_pred: int = 1,
     ) -> None:
         """Initialize for Class:GaussianInvDynDiffusion."""
         super().__init__()
@@ -128,16 +128,16 @@ class GaussianInvDynDiffusion(nn.Module):
     # ------------------------------------------ sampling ------------------------------------------#
 
     def predict_start_from_noise(
-        self,
-        x_t: torch.Tensor,
-        t: torch.Tensor,
-        noise: torch.Tensor,
+            self,
+            x_t: torch.Tensor,
+            t: torch.Tensor,
+            noise: torch.Tensor,
     ) -> torch.Tensor:
         """If self.predict_epsilon, model output is (scaled) noise, otherwise, model predicts x0 directly."""
         if self.predict_epsilon:
             return (
-                extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
-                - extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
+                    extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
+                    - extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
             )
 
         return noise
@@ -154,20 +154,20 @@ class GaussianInvDynDiffusion(nn.Module):
             q_m,q_v
         """
         posterior_mean = (
-            extract(self.posterior_mean_coef1, t, x_t.shape) * x_start
-            + extract(self.posterior_mean_coef2, t, x_t.shape) * x_t
+                extract(self.posterior_mean_coef1, t, x_t.shape) * x_start
+                + extract(self.posterior_mean_coef2, t, x_t.shape) * x_t
         )
         posterior_variance = extract(self.posterior_variance, t, x_t.shape)
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     def p_mean_variance(
-        self,
-        x: torch.Tensor,
-        t: torch.Tensor,
-        returns: torch.Tensor = None,
-        constraints: torch.Tensor = None,
-        skills: torch.Tensor = None,
+            self,
+            x: torch.Tensor,
+            t: torch.Tensor,
+            returns: torch.Tensor = None,
+            constraints: torch.Tensor = None,
+            skills: torch.Tensor = None,
     ) -> tuple:
         """Calculate for p-sample mean and variance.
 
@@ -202,12 +202,12 @@ class GaussianInvDynDiffusion(nn.Module):
 
     @torch.no_grad()
     def p_sample(
-        self,
-        x: torch.Tensor,
-        t: torch.Tensor,
-        returns: torch.Tensor = None,
-        constraints: torch.Tensor = None,
-        skills: torch.Tensor = None,
+            self,
+            x: torch.Tensor,
+            t: torch.Tensor,
+            returns: torch.Tensor = None,
+            constraints: torch.Tensor = None,
+            skills: torch.Tensor = None,
     ) -> torch.Tensor:
         """The process of single p-sample.
 
@@ -232,14 +232,14 @@ class GaussianInvDynDiffusion(nn.Module):
 
     @torch.no_grad()
     def p_sample_loop(
-        self,
-        shape: torch.Tensor,
-        history: torch.Tensor,
-        returns: torch.Tensor = None,
-        constraints: torch.Tensor = None,
-        skills: torch.Tensor = None,
-        verbose: torch.Tensor = True,
-        return_diffusion: object = False,
+            self,
+            shape: torch.Tensor,
+            history: torch.Tensor,
+            returns: torch.Tensor = None,
+            constraints: torch.Tensor = None,
+            skills: torch.Tensor = None,
+            verbose: torch.Tensor = True,
+            return_diffusion: object = False,
     ) -> object:
         """The process of p-sample loop.
 
@@ -279,12 +279,12 @@ class GaussianInvDynDiffusion(nn.Module):
 
     @torch.no_grad()
     def conditional_sample(
-        self,
-        obs_history: torch.Tensor,
-        returns: torch.Tensor = None,
-        horizon: torch.Tensor = None,
-        *args: tuple,
-        **kwargs: dict,
+            self,
+            obs_history: torch.Tensor,
+            returns: torch.Tensor = None,
+            horizon: torch.Tensor = None,
+            *args: tuple,
+            **kwargs: dict,
     ) -> torch.Tensor:
         """The process of conditional sample.
 
@@ -301,10 +301,10 @@ class GaussianInvDynDiffusion(nn.Module):
     # ------------------------------------------ training ------------------------------------------#
 
     def q_sample(
-        self,
-        x_start: torch.Tensor,
-        t: torch.Tensor,
-        noise: torch.Tensor = None,
+            self,
+            x_start: torch.Tensor,
+            t: torch.Tensor,
+            noise: torch.Tensor = None,
     ) -> torch.Tensor:
         """The process of q-sample.
 
@@ -316,17 +316,17 @@ class GaussianInvDynDiffusion(nn.Module):
             noise = torch.randn_like(x_start)
 
         return (
-            extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
-            + extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
+                extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
+                + extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
         )
 
     def p_losses(
-        self,
-        x_start: torch.Tensor,
-        t: torch.Tensor,
-        returns: torch.Tensor = None,
-        constraints: torch.Tensor = None,
-        skills: torch.Tensor = None,
+            self,
+            x_start: torch.Tensor,
+            t: torch.Tensor,
+            returns: torch.Tensor = None,
+            constraints: torch.Tensor = None,
+            skills: torch.Tensor = None,
     ) -> torch.Tensor:
         """Calculate p-sample loss value."""
         history = x_start[:, : self.history_lenght, :]
@@ -348,11 +348,11 @@ class GaussianInvDynDiffusion(nn.Module):
         return loss, info
 
     def loss(
-        self,
-        x: torch.Tensor,
-        returns: torch.Tensor = None,
-        constraints: torch.Tensor = None,
-        skills: torch.Tensor = None,
+            self,
+            x: torch.Tensor,
+            returns: torch.Tensor = None,
+            constraints: torch.Tensor = None,
+            skills: torch.Tensor = None,
     ) -> torch.Tensor:
         """The process of loss training."""
         if self.train_only_inv:
@@ -410,9 +410,7 @@ class GaussianInvDynDiffusion(nn.Module):
 
     def single_step_diffusion(self, x, t, c):
         device = self.betas.device
-
         batch_size = x.shape[0]
-
         if self.returns_condition:
             epsilon_cond = self.model(x, t, c, use_dropout=False)
             epsilon_uncond = self.model(x, t, c, force_dropout=True)
@@ -430,8 +428,8 @@ class GaussianInvDynDiffusion(nn.Module):
         else:
             assert RuntimeError()
         mean = (
-            extract(self.posterior_mean_coef1, t, x.shape) * x_recon
-            + extract(self.posterior_mean_coef2, t, x.shape) * x
+                extract(self.posterior_mean_coef1, t, x.shape) * x_recon
+                + extract(self.posterior_mean_coef2, t, x.shape) * x
         )
         variance = extract(self.posterior_variance, t, x.shape)
         log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x.shape)
@@ -442,11 +440,12 @@ class GaussianInvDynDiffusion(nn.Module):
         x_pre = mean + nonzero_mask * model_variance * noise
         return x_pre, mean, model_variance
 
+    @torch.no_grad()
     def multi_steps_diffusion(self, obs, c, return_diffusion=True):
 
         device = self.betas.device
         batch_size = obs.shape[0]
-        shape = [batch_size, self.n_timesteps, self.observation_dim]
+        shape = [batch_size, self.horizon, self.observation_dim]
         x = 0.5 * torch.randn(shape, device=device)
         x = history_cover(x, obs, 0, self.history_lenght)
 

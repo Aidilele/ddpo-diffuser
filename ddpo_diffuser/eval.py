@@ -5,7 +5,6 @@ from ddpo_diffuser.utils.builder import (
     build_evaluator,
     build_dataset,
     build_config)
-from utils.ReadFiles import load_yaml
 
 
 def evaluate():

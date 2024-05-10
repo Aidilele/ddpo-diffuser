@@ -1,9 +1,12 @@
 from ddpo_diffuser.model.diffusion import GaussianInvDynDiffusion
 from ddpo_diffuser.model.temporal import TemporalUnet
+from ddpo_diffuser.model.onlinediffuser import OnlineDiffuser
 from ddpo_diffuser.dataset.diffuser_dataset import DeciDiffuserDataset
 from ddpo_diffuser.utils.diffuser_trainer import DiffuserTrainer
 from ddpo_diffuser.utils.evaluator import Evaluator
 from ddpo_diffuser.utils.ReadFiles import load_yaml
+from ddpo_diffuser.dataset.rlbuffer import RLBuffer
+from ddpo_diffuser.env.environment import ParallelEnv
 import torch
 import gym
 import time
@@ -13,7 +16,12 @@ import os
 
 def build_env(config):
     env_name = config['defaults']['env_name']
-    return gym.make(env_name)
+    parallel_num = config['defaults']['env_parallel_num']
+    if parallel_num == 1:
+        env = gym.make(env_name)
+    else:
+        env = ParallelEnv(env_name=env_name, parallel_num=parallel_num)
+    return env
 
 
 def build_config(config_path=None):
@@ -87,6 +95,15 @@ def build_dataset(config):
     return dataset
 
 
+def build_rlbuffer(config, env):
+    obs_dim = env.observation_space.shape[0]
+    rlbuffer = RLBuffer(
+        config=config,
+        obs_dim=obs_dim
+    )
+    return rlbuffer
+
+
 def build_trainer(config, diffuser_model, dataset):
     trainer = DiffuserTrainer(diffuser_model=diffuser_model,
                               dataset=dataset,
@@ -109,3 +126,14 @@ def build_evaluator(config, diffuser_model, env, dataset):
         dataset=dataset
     )
     return evaluator
+
+
+def build_online_diffuser(config, diffuser_model, env, dataset, rlbuffer):
+    online_diffuser = OnlineDiffuser(
+        config=config,
+        env=env,
+        diffuser=diffuser_model,
+        dataset=dataset,
+        rlbuffer=rlbuffer
+    )
+    return online_diffuser

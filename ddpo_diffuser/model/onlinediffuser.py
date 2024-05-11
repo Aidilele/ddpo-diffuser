@@ -51,11 +51,12 @@ class OnlineDiffuser:
         self.clip = 0.2
         self.horizon = 64
         self.obs_history_length = 1
-        self.multi_step_pred = 50
+        self.multi_step_pred = 10
         self.step = 0
         self.save_freq = 100
-        self.update_ema_every = 10
+        self.update_ema_every = 2
         self.step_start_ema = 100
+        self.train_frep = 8
         self.save_checkpoints = True
 
     def reset_parameters(self):
@@ -144,13 +145,12 @@ class OnlineDiffuser:
                 advantages = self.cal_pred_traj_advantage(reward, cond)
                 self.rlbuffer.store(state=s, n_state=n_s, log_prob=log_prob, advantage=advantages, cond=cond, t=t)
 
+                if self.rlbuffer.total > self.rlbuffer.max_size and self.step % self.train_frep == 0:
+                    self.finetune()
                 if self.step % self.update_ema_every == 0:
                     self.step_ema()
                 if self.step % self.save_freq == 0:
                     self.save()
-
-            if self.rlbuffer.total > self.rlbuffer.max_size:
-                self.finetune()
 
     def save(self):
         '''

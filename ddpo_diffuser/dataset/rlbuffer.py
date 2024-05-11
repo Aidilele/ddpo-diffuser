@@ -1,8 +1,8 @@
 import torch
 
 
-class RLBuffer():
-    def __init__(self, config, obs_dim, max_size=256, sample_batch_size=16):
+class RLBuffer:
+    def __init__(self, config, obs_dim, max_size=128, sample_batch_size=8):
         n_diffusion_steps = config['defaults']['algo_cfgs']['n_diffusion_steps']
         horizon = config['defaults']['algo_cfgs']['horizon']
         self.device = torch.device(config['defaults']['train_cfgs']['device'])

@@ -24,14 +24,14 @@ defaults:
     evaluate_epoisodes: 0
     lr: 0.0005
     gradient_accumulate_every: 2
+    obs_history_length: 1
   algo_cfgs:
     gamma: 0.99
     batch_size: 128
     steps_per_epoch: 1000
-    obs_normalize: False
     horizon: 64
     n_diffusion_steps: 100
-    obs_history_length: 1
+
   logger_cfgs:
     use_tensorboard: True
     save_model_freq: 1000
@@ -40,7 +40,6 @@ defaults:
     returns_condition: True
     diffuser_model:
       train_only_inv: False
-      action_weight: 10
       loss_weights: None
       loss_discount: 1
       predict_epsilon: True
@@ -55,6 +54,8 @@ defaults:
   dataset_cfgs:
     use_padding: True
     include_returns: True
+    obs_normalize: False
+    reward_normalize: False
   evaluate_cfgs:
     returns: 0.9
     multi_step_pred: 20

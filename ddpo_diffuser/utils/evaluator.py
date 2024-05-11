@@ -14,7 +14,7 @@ class Evaluator:
                  evaluate_episode=10,
                  episode_max_length=1000,
                  obs_history_length=1,
-                 multi_step_pred=20
+                 multi_step_pred=10
                  ):
         self.config = config
         self.model = diffuser_model

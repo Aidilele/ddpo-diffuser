@@ -20,6 +20,12 @@ class ParallelEnv(gym.Env):
             results.append(result)
         return np.stack(results)
 
+    def sample_random_action(self):
+        actions = []
+        for env in self.env_list:
+            actions.append(env.action_space.sample())
+        return np.stack(actions)
+
     def step(self, action):
         observations = []
         rewards = []
@@ -42,4 +48,4 @@ class ParallelEnv(gym.Env):
         results = []
         for env in self.env_list:
             results.append(env.render(mode=mode))
-        return results
+        return np.stack(results)

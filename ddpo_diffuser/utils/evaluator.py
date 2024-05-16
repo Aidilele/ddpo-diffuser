@@ -50,16 +50,16 @@ class Evaluator:
         returns = torch.tensor([[0.8]], device=self.device)
         for episode in range(self.evalutate_episode):
             obs_history = []
-            action_history = [np.zeros(self.env.action_space.shape[0])]
+            action_history = [self.env.sample_random_action()]
             obs = self.env.reset()
             obs = self.obs_history_queue(obs, obs_history)
-            action = self.action_history_queue(np.zeros(self.env.action_space.shape[0]), action_history)
+            action = self.action_history_queue(self.env.sample_random_action(), action_history)
             self.env.render()
             terminal = False
             ep_reward = 0
-            obs = torch.from_numpy(obs).unsqueeze(0).to(self.device)
+            obs = torch.from_numpy(obs).to(self.device)
             obs = self.dataset.normalizer.normalize(obs)
-            action = torch.from_numpy(action).unsqueeze(0).to(self.device)
+            action = torch.from_numpy(action).to(self.device)
             frames = []
             step = 0
             while (step < self.episode_max_length) and (not terminal):

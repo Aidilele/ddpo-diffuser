@@ -18,10 +18,8 @@ import os
 def build_env(config):
     env_name = config['defaults']['env_name']
     parallel_num = config['defaults']['env_parallel_num']
-    if parallel_num == 1:
-        env = gym.make(env_name)
-    else:
-        env = ParallelEnv(env_name=env_name, parallel_num=parallel_num)
+
+    env = ParallelEnv(env_name=env_name, parallel_num=parallel_num)
     return env
 
 

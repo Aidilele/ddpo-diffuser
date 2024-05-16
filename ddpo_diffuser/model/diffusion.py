@@ -164,6 +164,7 @@ class GaussianInvDynDiffusion(nn.Module):
     def p_mean_variance(
             self,
             x: torch.Tensor,
+            obs: torch.Tensor,
             t: torch.Tensor,
             returns: torch.Tensor = None,
             constraints: torch.Tensor = None,
@@ -180,8 +181,8 @@ class GaussianInvDynDiffusion(nn.Module):
         """
         if self.returns_condition:
             # epsilon could be epsilon or x0 itself
-            epsilon_cond = self.model(x, t, returns, constraints, skills, use_dropout=False)
-            epsilon_uncond = self.model(x, t, returns, constraints, skills, force_dropout=True)
+            epsilon_cond = self.model(x, obs, t, returns, constraints, skills, use_dropout=False)
+            epsilon_uncond = self.model(x, obs, t, returns, constraints, skills, force_dropout=True)
             epsilon = epsilon_uncond + self.condition_guidance_w * (epsilon_cond - epsilon_uncond)
         else:
             epsilon = self.model(x, t)
@@ -204,6 +205,7 @@ class GaussianInvDynDiffusion(nn.Module):
     def p_sample(
             self,
             x: torch.Tensor,
+            obs: torch.Tensor,
             t: torch.Tensor,
             returns: torch.Tensor = None,
             constraints: torch.Tensor = None,
@@ -218,6 +220,7 @@ class GaussianInvDynDiffusion(nn.Module):
         b, *_, device = *x.shape, x.device
         model_mean, _, model_log_variance = self.p_mean_variance(
             x=x,
+            obs=obs,
             t=t,
             returns=returns,
             constraints=constraints,
@@ -260,7 +263,7 @@ class GaussianInvDynDiffusion(nn.Module):
         # progress = Progress(self.n_timesteps) if verbose else Silent()
         for i in reversed(range(self.n_timesteps)):
             timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
-            x, model_mean, model_variance = self.p_sample(x, timesteps, returns, constraints, skills)
+            x, model_mean, model_variance = self.p_sample(x, history,timesteps, returns, constraints, skills)
             x = history_cover(x, history, 0, self.history_lenght)
 
             # progress.update({'t': i})
@@ -333,7 +336,7 @@ class GaussianInvDynDiffusion(nn.Module):
         noise = torch.randn_like(x_start)
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
         x_noisy = history_cover(x_noisy, history, 0, self.history_lenght)
-        x_recon = self.model(x_noisy, t, returns, constraints=constraints, skills=skills)
+        x_recon = self.model(x_noisy, obs=history, t=t, returns=returns, constraints=constraints, skills=skills)
 
         if not self.predict_epsilon:
             x_recon = history_cover(x_recon, history, 0, self.history_lenght)

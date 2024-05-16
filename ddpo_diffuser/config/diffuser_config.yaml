@@ -16,7 +16,7 @@
 defaults:
   seed: 0
   env_name: Walker2d-v2
-  env_parallel_num: 10
+  env_parallel_num: 1
   train_cfgs:
     device: cuda:0
     total_steps: 1000000
@@ -31,6 +31,7 @@ defaults:
     steps_per_epoch: 1000
     horizon: 64
     n_diffusion_steps: 100
+    noise_model: "DiT"
 
   logger_cfgs:
     use_tensorboard: True
@@ -51,6 +52,13 @@ defaults:
       calc_energy: False
       dim: 64
       condition_dropout: 0.25
+    DiT:
+      hidden_dim: 128
+      cond_dim: 1
+      n_heads: 4
+      depth: 8
+      dropout: 0.1
+
   dataset_cfgs:
     use_padding: True
     include_returns: True

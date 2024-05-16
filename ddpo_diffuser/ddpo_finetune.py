@@ -8,7 +8,6 @@ from ddpo_diffuser.utils.builder import (
     build_rlbuffer
 )
 
-
 def finetune():
     config_path = "C:\Project\ddpo-diffuser\ddpo_diffuser/runs/2024-5-9-10-31-17"
     config = build_config(config_path=config_path)

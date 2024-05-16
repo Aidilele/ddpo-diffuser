@@ -7,6 +7,7 @@ from ddpo_diffuser.utils.evaluator import Evaluator
 from ddpo_diffuser.utils.ReadFiles import load_yaml
 from ddpo_diffuser.dataset.rlbuffer import RLBuffer
 from ddpo_diffuser.env.environment import ParallelEnv
+from ddpo_diffuser.model.dit_model import DiT1d
 import torch
 import gym
 import time
@@ -50,15 +51,26 @@ def build_config(config_path=None):
 
 def build_noise_model(config, env):
     obs_dim = env.observation_space.shape[0]
-    noise_model = TemporalUnet(
-        horizon=config['defaults']['algo_cfgs']['horizon'],
-        transition_dim=obs_dim,
-        dim=config['defaults']['model_cfgs']['temporalU_model']['dim'],
-        dim_mults=config['defaults']['model_cfgs']['temporalU_model']['dim_mults'],
-        returns_condition=config['defaults']['dataset_cfgs']['include_returns'],
-        calc_energy=config['defaults']['model_cfgs']['temporalU_model']['calc_energy'],
-        condition_dropout=config['defaults']['model_cfgs']['temporalU_model']['condition_dropout'],
-    )
+    if config['defaults']['algo_cfgs']['noise_model'] == 'TemporalUnet':
+        noise_model = TemporalUnet(
+            horizon=config['defaults']['algo_cfgs']['horizon'],
+            transition_dim=obs_dim,
+            dim=config['defaults']['model_cfgs']['temporalU_model']['dim'],
+            dim_mults=config['defaults']['model_cfgs']['temporalU_model']['dim_mults'],
+            returns_condition=config['defaults']['dataset_cfgs']['include_returns'],
+            calc_energy=config['defaults']['model_cfgs']['temporalU_model']['calc_energy'],
+            condition_dropout=config['defaults']['model_cfgs']['temporalU_model']['condition_dropout'],
+        )
+    elif config['defaults']['algo_cfgs']['noise_model'] == 'DiT':
+        noise_model = DiT1d(
+            x_dim=obs_dim,
+            cond_dim= config['defaults']['model_cfgs']['DiT']["cond_dim"],
+            hidden_dim=config['defaults']['model_cfgs']['DiT']['hidden_dim'],
+            n_heads=config['defaults']['model_cfgs']['DiT']['n_heads'],
+            depth=config['defaults']['model_cfgs']['DiT']['depth'],
+            dropout=config['defaults']['model_cfgs']['DiT']['dropout'],
+        )
+
     return noise_model
 
 

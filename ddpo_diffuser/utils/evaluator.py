@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import cv2
 import os
@@ -14,7 +15,7 @@ class Evaluator:
                  evaluate_episode=10,
                  episode_max_length=1000,
                  obs_history_length=1,
-                 multi_step_pred=10
+                 multi_step_pred=5
                  ):
         self.config = config
         self.model = diffuser_model
@@ -33,10 +34,18 @@ class Evaluator:
         self.model.to(self.device)
         self.env.reset()
 
+    def obs_history_queue(self, obs, obs_queue: list):
+        obs_queue.append(obs)
+        if len(obs_queue) > self.obs_history_length:
+            obs_queue.__delitem__(0)
+        return np.stack(obs_queue, axis=-2).astype(np.float32)
+
     def eval(self):
-        returns = torch.tensor([[0.9]], device=self.device)
+        returns = torch.tensor([[-0.8]], device=self.device)
         for episode in range(self.evalutate_episode):
+            obs_history = []
             obs = self.env.reset()
+            obs = self.obs_history_queue(obs, obs_history)
             self.env.render()
             terminal = False
             ep_reward = 0
@@ -48,14 +57,15 @@ class Evaluator:
                 # for i in range(self.episode_max_length):
                 x = self.model.conditional_sample(obs, returns=returns)
                 pred_action_obs = x[:, self.obs_history_length - 1:]
-                obs = pred_action_obs[:, 0]
+                obs = pred_action_obs[:, 0].unsqueeze(1)
                 for pred_step in range(self.multi_step_pred):
 
                     obs_next = pred_action_obs[:, pred_step + 1]
-                    obs_comb = torch.cat((obs, obs_next), dim=-1)
+                    obs_comb = torch.cat((obs[:,-1,:], obs_next), dim=-1)
                     pred_action = self.model.inv_model(obs_comb)
                     action = pred_action.squeeze().detach().cpu().numpy()
                     next_obs, reward, terminal, _ = self.env.step(action)
+                    next_obs = self.obs_history_queue(next_obs, obs_history)
                     frames.append(self.env.render(mode="rgb_array"))
                     ep_reward += reward
                     step += 1
@@ -82,7 +92,7 @@ class Evaluator:
         video_path = os.path.join(self.bucket, 'video')
         if not os.path.exists(video_path):
             os.makedirs(video_path)
-        video_name = video_path+'/Episode' + str(episode) + '_R' + str(int(ep_reward)) + '.mp4'
+        video_name = video_path + '/Episode' + str(episode) + '_R' + str(int(ep_reward)) + '.mp4'
         out = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, size)
         for i in range(len(frames)):
             out.write(frames[i])

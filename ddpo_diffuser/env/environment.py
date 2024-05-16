@@ -54,4 +54,4 @@ class ParallelEnv(gym.Env):
         results = []
         for env in self.env_list:
             results.append(env.render(mode=mode))
-        return np.stack(results)
+        return results

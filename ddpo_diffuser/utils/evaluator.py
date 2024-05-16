@@ -67,7 +67,7 @@ class Evaluator:
                 pred_action_queue = x[:, self.obs_history_length - 1:]
                 for pred_step in range(self.multi_step_pred):
                     pred_action = pred_action_queue[:, pred_step, :]
-                    action = pred_action.squeeze().detach().cpu().numpy()
+                    action = pred_action.detach().cpu().numpy()
                     next_obs, reward, terminal, _ = self.env.step(action)
                     action = self.action_history_queue(action, action_history)
                     next_obs = self.obs_history_queue(next_obs, obs_history)
@@ -94,15 +94,15 @@ class Evaluator:
         self.model.load_state_dict(data['model'])
 
     def render_frames(self, frames, episode, ep_reward):
-        frames = np.stack(frames, axis=1)
-        size = frames.shape[-3:-1]
+        length = len(frames)
+        batch_size=len(frames[0])
+        height, width, tunnel = frames[0][0].shape
         video_path = os.path.join(self.bucket, 'video')
         if not os.path.exists(video_path):
             os.makedirs(video_path)
-        for i in range(frames.shape[0]):
-            frame=frames[i]
-            video_name = video_path + '/Episode' + str(episode) + '_R' + str(int(ep_reward[i])) + '.mp4'
-            out = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'mp4v'), 120, size)
-            for j in range(len(frame)):
-                out.write(frame[j])
+        for i in range(batch_size):
+            video_name = video_path + '/E' + str(episode) + '_P' + str(i) + '_R' + str(int(ep_reward[i])) + '.mp4'
+            out = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'mp4v'), 120, (height, width))
+            for j in range(length):
+                out.write(frames[j][i])
             out.release()

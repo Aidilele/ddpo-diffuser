@@ -51,10 +51,11 @@ def build_config(config_path=None):
 
 def build_noise_model(config, env):
     obs_dim = env.observation_space.shape[0]
+    action_dim=env.action_space.shape[0]
     if config['defaults']['algo_cfgs']['noise_model'] == 'TemporalUnet':
         noise_model = TemporalUnet(
             horizon=config['defaults']['algo_cfgs']['horizon'],
-            transition_dim=obs_dim,
+            transition_dim=obs_dim+action_dim,
             dim=config['defaults']['model_cfgs']['temporalU_model']['dim'],
             dim_mults=config['defaults']['model_cfgs']['temporalU_model']['dim_mults'],
             returns_condition=config['defaults']['dataset_cfgs']['include_returns'],
@@ -63,7 +64,8 @@ def build_noise_model(config, env):
         )
     elif config['defaults']['algo_cfgs']['noise_model'] == 'DiT':
         noise_model = DiT1d(
-            x_dim=obs_dim,
+            x_dim=obs_dim+action_dim,
+            action_dim=action_dim,
             cond_dim= config['defaults']['model_cfgs']['DiT']["cond_dim"],
             hidden_dim=config['defaults']['model_cfgs']['DiT']['hidden_dim'],
             n_heads=config['defaults']['model_cfgs']['DiT']['n_heads'],

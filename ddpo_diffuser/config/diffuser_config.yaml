@@ -30,7 +30,7 @@ defaults:
     batch_size: 128
     steps_per_epoch: 1000
     horizon: 64
-    n_diffusion_steps: 100
+    n_diffusion_steps: 10
     noise_model: "DiT"
 
   logger_cfgs:

@@ -105,12 +105,12 @@ class Conv1dBlock(nn.Module):
     """
 
     def __init__(
-        self,
-        inp_channels: int,
-        out_channels: int,
-        kernel_size: int,
-        mish: bool = True,
-        n_groups: int = 8,
+            self,
+            inp_channels: int,
+            out_channels: int,
+            kernel_size: int,
+            mish: bool = True,
+            n_groups: int = 8,
     ) -> None:
         """Initialize for Class:Conv1dBlock."""
         super().__init__()
@@ -143,9 +143,9 @@ def extract(a: torch.Tensor, t: torch.Tensor, x_shape: torch.Tensor) -> torch.Te
 
 
 def cosine_beta_schedule(
-    timesteps: int,
-    s: float = 0.008,
-    dtype: object = torch.float32,
+        timesteps: int,
+        s: float = 0.008,
+        dtype: object = torch.float32,
 ) -> torch.Tensor:
     """Calculate cosine beta schedule value.
 
@@ -169,14 +169,16 @@ def cosine_beta_schedule(
 
 
 def history_cover(
-    x: torch.Tensor,
-    history: torch.Tensor,
-    action_dim: int,
-    history_length: int,
+        x: torch.Tensor,
+        history: torch.Tensor,
+        action_dim: int,
+        history_length: int,
 ) -> torch.Tensor:
     """Update observation history queue."""
     history_length = history.shape[-2]
-    x[:, :history_length, action_dim:] = history.clone()
+    x[:, :history_length - 1, :] = history[:, :-1, :].clone()
+    x[:, history_length-1, action_dim:] = history[:, -1, action_dim:].clone()
+    # x[:, :history_length, action_dim:] = history.clone()
     return x
 
 

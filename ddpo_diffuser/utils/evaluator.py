@@ -40,31 +40,37 @@ class Evaluator:
             obs_queue.__delitem__(0)
         return np.stack(obs_queue, axis=-2).astype(np.float32)
 
+    def action_history_queue(self, action, action_queue: list):
+        action_queue.insert(-1, action)
+        if len(action_queue) > self.obs_history_length:
+            action_queue.__delitem__(0)
+        return np.stack(action_queue, axis=-2).astype(np.float32)
+
     def eval(self):
-        returns = torch.tensor([[-0.8]], device=self.device)
+        returns = torch.tensor([[0.8]], device=self.device)
         for episode in range(self.evalutate_episode):
             obs_history = []
+            action_history = [np.zeros(self.env.action_space.shape[0])]
             obs = self.env.reset()
             obs = self.obs_history_queue(obs, obs_history)
+            action = self.action_history_queue(np.zeros(self.env.action_space.shape[0]), action_history)
             self.env.render()
             terminal = False
             ep_reward = 0
             obs = torch.from_numpy(obs).unsqueeze(0).to(self.device)
             obs = self.dataset.normalizer.normalize(obs)
+            action = torch.from_numpy(action).unsqueeze(0).to(self.device)
             frames = []
             step = 0
             while (step < self.episode_max_length) and (not terminal):
                 # for i in range(self.episode_max_length):
-                x = self.model.conditional_sample(obs, returns=returns)
-                pred_action_obs = x[:, self.obs_history_length - 1:]
-                obs = pred_action_obs[:, 0].unsqueeze(1)
+                x = self.model.conditional_sample(obs, action, returns=returns)
+                pred_action_queue = x[:, self.obs_history_length - 1:]
                 for pred_step in range(self.multi_step_pred):
-
-                    obs_next = pred_action_obs[:, pred_step + 1]
-                    obs_comb = torch.cat((obs[:,-1,:], obs_next), dim=-1)
-                    pred_action = self.model.inv_model(obs_comb)
+                    pred_action = pred_action_queue[:, pred_step, :]
                     action = pred_action.squeeze().detach().cpu().numpy()
                     next_obs, reward, terminal, _ = self.env.step(action)
+                    action = self.action_history_queue(action, action_history)
                     next_obs = self.obs_history_queue(next_obs, obs_history)
                     frames.append(self.env.render(mode="rgb_array"))
                     ep_reward += reward
@@ -74,6 +80,7 @@ class Evaluator:
                     # obs = torch.from_numpy(next_obs)
                     obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device).unsqueeze(0)
                     obs = self.dataset.normalizer.normalize(obs)
+                    action = torch.tensor(action, dtype=torch.float32, device=self.device).unsqueeze(0)
             self.render_frames(frames, episode, ep_reward)
             print('episode:', episode, '--> ep_reward:', ep_reward)
 
@@ -93,7 +100,7 @@ class Evaluator:
         if not os.path.exists(video_path):
             os.makedirs(video_path)
         video_name = video_path + '/Episode' + str(episode) + '_R' + str(int(ep_reward)) + '.mp4'
-        out = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, size)
+        out = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'mp4v'), 120, size)
         for i in range(len(frames)):
             out.write(frames[i])
         out.release()

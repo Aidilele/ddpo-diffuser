@@ -165,13 +165,13 @@ class Finallayer1d(nn.Module):
 
 class DiT1d(nn.Module):
     def __init__(self,
-                 x_dim: int, cond_dim: int,
+                 x_dim: int, cond_dim: int, action_dim: int,
                  hidden_dim: int = 128, n_heads: int = 4, depth: int = 8, dropout: float = 0.1,
                  condition_dropout=0.25):
         super().__init__()
-        self.x_dim, self.cond_dim, self.hidden_dim, self.n_heads, self.depth = x_dim, cond_dim, hidden_dim, n_heads, depth
+        self.x_dim, self.action_dim, self.cond_dim, self.hidden_dim, self.n_heads, self.depth = x_dim, action_dim, cond_dim, hidden_dim, n_heads, depth
         self.x_proj = nn.Linear(x_dim, hidden_dim)
-        self.obs_emb = ObsAttentionEmbedding(x_dim, hidden_dim, n_heads, dropout)
+        self.obs_emb = ObsAttentionEmbedding(x_dim - action_dim, hidden_dim, n_heads, dropout)
         self.t_emb = SinPosTimeEmbedding(hidden_dim)
         self.mask_dist = Bernoulli(probs=1 - condition_dropout)
         self.attr_proj = CondEmbedding(cond_dim, hidden_dim)
@@ -232,7 +232,7 @@ class DiT1d(nn.Module):
         x = self.x_proj(x) + self.pos_emb_cache[None,]
         t = self.t_emb(t)
 
-        obs_emb = self.obs_emb(obs)
+        obs_emb = self.obs_emb(obs[:, :, self.action_dim:])
         if returns is not None:
             emb = self.attr_proj(returns)
 

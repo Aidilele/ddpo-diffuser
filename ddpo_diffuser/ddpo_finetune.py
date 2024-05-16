@@ -9,7 +9,7 @@ from ddpo_diffuser.utils.builder import (
 )
 
 def finetune():
-    config_path = "C:\Project\ddpo-diffuser\ddpo_diffuser/runs/2024-5-9-10-31-17"
+    config_path = "C:\Project\ddpo-diffuser\ddpo_diffuser/runs/2024-5-16-14-53-19"
     config = build_config(config_path=config_path)
     env = build_env(config=config)
     dataset = build_dataset(config=config)

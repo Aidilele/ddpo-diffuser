@@ -103,7 +103,7 @@ class OnlineDiffuser:
         condition = condition.repeat(diffusion_steps, 1).view(batch_size, diffusion_steps, -1)
         history = torch.cat([action, obs], dim=-1)
         history = history.repeat(diffusion_steps, 1, 1).view(batch_size, diffusion_steps, self.obs_history_length, -1)
-        return sample[:, :, :self.action_dim], state, next_state, log_prob, reward, history, condition, t
+        return sample, state, next_state, log_prob, reward, history, condition, t
 
     def cal_pred_traj_advantage(self, reward, target_reward):
         batch_size, n_diffusion_steps, _ = target_reward.shape
@@ -148,7 +148,6 @@ class OnlineDiffuser:
             obs = self.obs_history_queue(obs, obs_history)
             action = self.action_history_queue(self.env.sample_random_action(), action_history)
             obs_dim = obs.shape[-1]
-            # self.env.render()
             obs = torch.from_numpy(obs).to(self.device)
             action = torch.from_numpy(action).to(self.device)
             batch_size, _, _ = obs.shape
@@ -168,7 +167,6 @@ class OnlineDiffuser:
                     step += 1
                     if torch.tensor(terminal).all():
                         break
-                    # obs = torch.from_numpy(next_obs)
                     obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
                     obs = self.dataset.normalizer.normalize(obs)
                     action = torch.tensor(action, dtype=torch.float32, device=self.device)

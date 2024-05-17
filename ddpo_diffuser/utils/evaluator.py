@@ -14,11 +14,12 @@ class Evaluator:
                  render=False,
                  evaluate_episode=10,
                  episode_max_length=1000,
-                 obs_history_length=1,
                  ):
         self.config = config
         self.model = diffuser_model
         self.env = env
+        self.action_dim = self.env.action_space.shape[0]
+        self.obs_dim = self.env.observation_space.shape[0]
         self.dataset = dataset
         self.device = torch.device(device)
         self.render = render
@@ -45,6 +46,15 @@ class Evaluator:
             action_queue.__delitem__(0)
         return np.stack(action_queue, axis=-2).astype(np.float32)
 
+    def multi_pred_implement(self, pred_queue, label='state_only'):
+        for pred_step in range(self.multi_step_pred):
+            if label == "state_action":
+                pred_action = pred_queue[:, pred_step, :self.action_dim]
+                action = pred_action.detach().cpu().numpy()
+            elif label == 'state_only':
+                obs_pre = pred_queue[:, pred_step]
+                obs_next = pred_queue[:, pred_step + 1]
+
     def eval(self):
         returns = 0.8 * torch.ones((self.env.parallel_num, 1), device=self.device)
         for episode in range(self.evalutate_episode):
@@ -61,9 +71,8 @@ class Evaluator:
             frames = []
             step = 0
             while (step < self.episode_max_length) and (not terminal.all()):
-                # for i in range(self.episode_max_length):
                 x = self.model.conditional_sample(obs, action, returns=returns)
-                pred_action_queue = x[:, self.obs_history_length - 1:]
+                pred_queue = x[:, self.obs_history_length - 1:]
                 for pred_step in range(self.multi_step_pred):
                     pred_action = pred_action_queue[:, pred_step, :]
                     action = pred_action.detach().cpu().numpy()
@@ -75,7 +84,6 @@ class Evaluator:
                     step += 1
                     if terminal.all():
                         break
-                    # obs = torch.from_numpy(next_obs)
                     obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
                     obs = self.dataset.normalizer.normalize(obs)
                     action = torch.tensor(action, dtype=torch.float32, device=self.device)

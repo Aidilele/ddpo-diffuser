@@ -294,7 +294,7 @@ class GaussianInvDynDiffusion(nn.Module):
         shape = (batch_size, horizon, self.observation_dim + self.action_dim)
         history = torch.cat([action_history, obs_history], dim=-1)
 
-        return self.p_sample_loop(shape, history, returns, *args, **kwargs)[:, :, :self.action_dim]
+        return self.p_sample_loop(shape, history, returns, *args, **kwargs)
 
     # ------------------------------------------ training ------------------------------------------#
 

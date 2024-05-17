@@ -57,13 +57,6 @@ class GaussianInvDynDiffusion(nn.Module):
         self.multi_step_pred = multi_step_pred
         self.multi_step_count = 0
 
-        self.inv_model = nn.Sequential(
-            nn.Linear(2 * self.observation_dim, hidden_dim),
-            nn.Tanh(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.Tanh(),
-            nn.Linear(hidden_dim, self.action_dim),
-        )
         self.returns_condition = returns_condition
         self.condition_guidance_w = condition_guidance_w
 
@@ -299,9 +292,9 @@ class GaussianInvDynDiffusion(nn.Module):
         batch_size = len(obs_history)
         horizon = horizon or self.horizon
         shape = (batch_size, horizon, self.observation_dim + self.action_dim)
-        history = torch.cat([action_history, obs_history],dim=-1)
+        history = torch.cat([action_history, obs_history], dim=-1)
 
-        return self.p_sample_loop(shape, history, returns, *args, **kwargs)[:,:,:self.action_dim]
+        return self.p_sample_loop(shape, history, returns, *args, **kwargs)[:, :, :self.action_dim]
 
     # ------------------------------------------ training ------------------------------------------#
 
@@ -360,68 +353,33 @@ class GaussianInvDynDiffusion(nn.Module):
             skills: torch.Tensor = None,
     ) -> torch.Tensor:
         """The process of loss training."""
-        if self.train_only_inv:
-            # Calculating inv loss
-            x_t = x[:, :-1, self.action_dim:]
-            a_t = x[:, :-1, : self.action_dim]
-            x_t_1 = x[:, 1:, self.action_dim:]
-            x_comb_t = torch.cat([x_t, x_t_1], dim=-1)
-            x_comb_t = x_comb_t.reshape(-1, 2 * self.observation_dim)
-            a_t = a_t.reshape(-1, self.action_dim)
 
-            pred_a_t = self.inv_model(x_comb_t)
-            loss = F.mse_loss(pred_a_t, a_t)
-            info = {'loss_inv': loss}
-        else:
-            batch_size = len(x)
-            t = torch.randint(0, self.n_timesteps, (batch_size,), device=x.device).long()
-            diffuse_loss, info = self.p_losses(
-                x,
-                t,
-                returns,
-                constraints,
-                skills,
-            )
-            # Calculating inv loss
-            # x_t = x[:, :-1, self.action_dim:]
-            # a_t = x[:, :-1, : self.action_dim]
-            # x_t_1 = x[:, 1:, self.action_dim:]
-            # x_comb_t = torch.cat([x_t, x_t_1], dim=-1)
-            # x_comb_t = x_comb_t.reshape(-1, 2 * self.observation_dim)
-            # a_t = a_t.reshape(-1, self.action_dim)
-
-            # pred_a_t = self.inv_model(x_comb_t)
-            # inv_loss = F.mse_loss(pred_a_t, a_t)
-            # loss = (1 / 2) * (diffuse_loss + inv_loss)
-            info['loss_diffuser'] = diffuse_loss
-            # info['loss_inv'] = inv_loss
-            # info['loss_total'] = loss
+        batch_size = len(x)
+        t = torch.randint(0, self.n_timesteps, (batch_size,), device=x.device).long()
+        diffuse_loss, info = self.p_losses(
+            x,
+            t,
+            returns,
+            constraints,
+            skills,
+        )
+        info['loss_diffuser'] = diffuse_loss
 
         return diffuse_loss, info
-
-    def history_obs_update(self, obs: torch.Tensor) -> torch.Tensor:
-        """Maintain the history observation queue."""
-        if self.history_count % self.n_timesteps == 0:
-            self.history_obs = [torch.zeros((1, self.observation_dim))] * self.history_lenght
-        self.history_obs.append(obs)
-        self.history_obs.pop(0)
-        history_obs = torch.stack(self.history_obs, dim=1)
-        self.history_count += 1
-        return history_obs
 
     def forward(self, *args: tuple, **kwargs: dict) -> torch.Tensor:
         """Diffusion model forward function."""
         return self.conditional_sample(*args, **kwargs)
 
-    def single_step_diffusion(self, x, t, c):
+    def single_step_diffusion(self, x, obs, t, c):
         device = self.betas.device
         batch_size = x.shape[0]
         if self.returns_condition:
-            epsilon_cond = self.model(x, t, c, use_dropout=False)
-            epsilon_uncond = self.model(x, t, c, force_dropout=True)
+            epsilon_cond = self.model(x, obs, t, c, use_dropout=False)
+            epsilon_uncond = self.model(x, obs, t, c, force_dropout=True)
             epsilon = epsilon_uncond + self.condition_guidance_w * (epsilon_cond - epsilon_uncond)
         else:
-            epsilon = self.model(x, t)
+            epsilon = self.model(x, obs, t)
 
         if self.predict_epsilon:
             x_recon = extract(self.sqrt_recip_alphas_cumprod, t, x.shape) * x - extract(
@@ -436,7 +394,7 @@ class GaussianInvDynDiffusion(nn.Module):
                 extract(self.posterior_mean_coef1, t, x.shape) * x_recon
                 + extract(self.posterior_mean_coef2, t, x.shape) * x
         )
-        variance = extract(self.posterior_variance, t, x.shape)
+        # variance = extract(self.posterior_variance, t, x.shape)
         log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x.shape)
 
         noise = 0.5 * torch.randn_like(x, device=device)
@@ -446,36 +404,30 @@ class GaussianInvDynDiffusion(nn.Module):
         return x_pre, mean, model_variance
 
     @torch.no_grad()
-    def multi_steps_diffusion(self, obs, c, return_diffusion=True):
+    def multi_steps_diffusion(self, obs, action, c):
 
         device = self.betas.device
         batch_size = obs.shape[0]
-        shape = [batch_size, self.horizon, self.observation_dim]
+        shape = [batch_size, self.horizon, self.observation_dim+self.action_dim]
+        history = torch.cat([action, obs], dim=-1)
         x = 0.5 * torch.randn(shape, device=device)
-        x = history_cover(x, obs, self.action_dim, self.history_lenght)
-
-        if return_diffusion:
-            diffusion = [x]
-            mean = []
-            variance = []
-            t = []
+        x = history_cover(x, history, self.action_dim, self.history_lenght)
+        diffusion = [x]
+        mean = []
+        variance = []
+        t = []
 
         for i in reversed(range(self.n_timesteps)):
             timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
-            x, model_mean, model_variance = self.single_step_diffusion(x, timesteps, c)
-            x = history_cover(x, obs, self.action_dim, self.history_lenght)
+            x, model_mean, model_variance = self.single_step_diffusion(x, history,timesteps, c)
+            x = history_cover(x, history, self.action_dim, self.history_lenght)
+            diffusion.append(x)
+            mean.append(model_mean)
+            variance.append(model_variance)
+            t.append(timesteps)
 
-            if return_diffusion:
-                diffusion.append(x)
-                mean.append(model_mean)
-                variance.append(model_variance)
-                t.append(timesteps)
-
-        if return_diffusion:
-            return (x,
-                    torch.stack(diffusion, dim=1),
-                    torch.stack(mean, dim=1),
-                    torch.stack(variance, dim=1),
-                    torch.stack(t, dim=1))
-
-        return x
+        return (x,
+                torch.stack(diffusion, dim=1),
+                torch.stack(mean, dim=1),
+                torch.stack(variance, dim=1),
+                torch.stack(t, dim=1))

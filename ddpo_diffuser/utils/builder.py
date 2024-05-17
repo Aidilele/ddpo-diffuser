@@ -108,10 +108,10 @@ def build_dataset(config):
 
 
 def build_rlbuffer(config, env):
-    obs_dim = env.observation_space.shape[0]
+    x_dim = env.observation_space.shape[0]+env.action_space.shape[0]
     rlbuffer = RLBuffer(
         config=config,
-        obs_dim=obs_dim
+        x_dim=x_dim
     )
     return rlbuffer
 

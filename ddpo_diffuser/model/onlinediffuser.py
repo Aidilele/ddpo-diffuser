@@ -2,6 +2,7 @@ import torch
 from ddpo_diffuser.model.diffusion import GaussianInvDynDiffusion
 import copy
 import os
+import numpy as np
 
 
 class EMA():
@@ -34,6 +35,8 @@ class OnlineDiffuser:
                  rlbuffer,
                  reward_model=None):
         self.env = env
+        self.obs_dim = self.env.observation_space.shape[0]
+        self.action_dim = self.env.action_space.shape[0]
         self.dataset = dataset
         self.rlbuffer = rlbuffer
         self.device = torch.device(config['defaults']['train_cfgs']['device'])
@@ -68,9 +71,21 @@ class OnlineDiffuser:
             return
         self.ema.update_model_average(self.old_diffuser, self.diffuser)
 
-    def rollout(self, obs, condition):
+    def obs_history_queue(self, obs, obs_queue: list):
+        obs_queue.append(obs)
+        if len(obs_queue) > self.obs_history_length:
+            obs_queue.__delitem__(0)
+        return np.stack(obs_queue, axis=-2).astype(np.float32)
+
+    def action_history_queue(self, action, action_queue: list):
+        action_queue.insert(-1, action)
+        if len(action_queue) > self.obs_history_length:
+            action_queue.__delitem__(0)
+        return np.stack(action_queue, axis=-2).astype(np.float32)
+
+    def rollout(self, obs, action, condition):
         self.step += 1
-        sample, x_latent, mean, variance, t = self.old_diffuser.multi_steps_diffusion(obs, condition)
+        sample, x_latent, mean, variance, t = self.old_diffuser.multi_steps_diffusion(obs, action, condition)
         state = x_latent[:, :-1, :, :]
         next_state = x_latent[:, 1:, :, :]
         batch_size, diffusion_steps, *_ = state.shape
@@ -79,19 +94,23 @@ class OnlineDiffuser:
         # reward = torch.zeros((batch_size, diffusion_steps))
         # reward[:, 0] = self.reward_model(sample, condition)
         reward = 0
-        condition = condition.repeat(100, 1).view(batch_size, diffusion_steps, -1)
-        return sample, state, next_state, log_prob, reward, condition, t
+        condition = condition.repeat(diffusion_steps, 1).view(batch_size, diffusion_steps, -1)
+        history = torch.cat([action, obs], dim=-1)
+        history = history.repeat(diffusion_steps, 1, 1).view(batch_size, diffusion_steps, self.obs_history_length, -1)
+        return sample[:, :, :self.action_dim], state, next_state, log_prob, reward, history, condition, t
 
     def cal_pred_traj_advantage(self, reward, target_reward):
         batch_size, n_diffusion_steps, _ = target_reward.shape
-        ep_reward = reward - target_reward
-        advantages = ep_reward.squeeze(-1) * self.r_discounts
+        ep_reward = reward
+        advantages = ep_reward * self.r_discounts
         return advantages
 
     def finetune(self):
-        state, next_state, log_prob, advantage, condition, t = self.rlbuffer.sample()
+        state, next_state, log_prob, advantage, history, condition, t = self.rlbuffer.sample()
         batch_size, n_diffusion_steps, horizon, obs_dim = state.shape
-        x_pred, mean, variance = self.diffuser.single_step_diffusion(state.view(-1, horizon, obs_dim), t.view(-1),
+        x_pred, mean, variance = self.diffuser.single_step_diffusion(state.view(-1, horizon, obs_dim),
+                                                                     history.view(-1, self.obs_history_length, obs_dim),
+                                                                     t.view(-1),
                                                                      condition.view(batch_size * n_diffusion_steps, -1))
         mean = mean.view(batch_size, n_diffusion_steps, horizon, obs_dim)
         variance = variance.view(batch_size, n_diffusion_steps, 1, 1)
@@ -111,39 +130,43 @@ class OnlineDiffuser:
 
     def online_training(self):
 
-        returns = torch.tensor([[0.9]], device=self.device)
+        returns = 0.8 * torch.ones((self.env.parallel_num, 1), device=self.device)
         for episode in range(100000):
-            obs = self.env.reset()
+            obs_history = []
+            action_history = [self.env.sample_random_action()]
+            obs, terminal = self.env.reset()
+            obs = self.obs_history_queue(obs, obs_history)
+            action = self.action_history_queue(self.env.sample_random_action(), action_history)
             obs_dim = obs.shape[-1]
             # self.env.render()
-            terminal = False
-            obs = torch.from_numpy(obs).view(-1, obs_dim).to(self.device)
-            batch_size, _ = obs.shape
-            returns = returns.repeat(batch_size, 1)
+            obs = torch.from_numpy(obs).to(self.device)
+            action = torch.from_numpy(action).to(self.device)
+            batch_size, _, _ = obs.shape
             obs = self.dataset.normalizer.normalize(obs)
             step = 0
-            while (step < 1000) and (not terminal):
-                x, s, n_s, log_prob, _, cond, t = self.rollout(obs=obs, condition=returns)
-                pred_action_obs = x[:, self.obs_history_length - 1:]
-                obs = pred_action_obs[:, 0]
+            while (step < 1000) and (not terminal.all()):
+                x, s, n_s, log_prob, _, history, cond, t = self.rollout(obs=obs, action=action, condition=returns)
+                pred_action_queue = x[:, self.obs_history_length - 1:]
                 ep_reward = []
                 for pred_step in range(self.multi_step_pred):
-                    obs_next = pred_action_obs[:, pred_step + 1]
-                    obs_comb = torch.cat((obs, obs_next), dim=-1)
-                    pred_action = self.diffuser.inv_model(obs_comb)
-                    action = pred_action.squeeze().detach().cpu().numpy()
+                    pred_action = pred_action_queue[:, pred_step, :]
+                    action = pred_action.detach().cpu().numpy()
                     next_obs, reward, terminal, _ = self.env.step(action)
+                    action = self.action_history_queue(action, action_history)
+                    next_obs = self.obs_history_queue(next_obs, obs_history)
                     ep_reward.append(reward)
                     step += 1
                     if torch.tensor(terminal).all():
                         break
                     # obs = torch.from_numpy(next_obs)
-                    obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device).view(batch_size, obs_dim)
+                    obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
                     obs = self.dataset.normalizer.normalize(obs)
+                    action = torch.tensor(action, dtype=torch.float32, device=self.device)
                 reward = torch.tensor(ep_reward, device=self.device).T
                 reward = self.dataset.cal_return(reward)
                 advantages = self.cal_pred_traj_advantage(reward, cond)
-                self.rlbuffer.store(state=s, n_state=n_s, log_prob=log_prob, advantage=advantages, cond=cond, t=t)
+                self.rlbuffer.store(state=s, n_state=n_s, log_prob=log_prob, advantage=advantages, history=history,
+                                    cond=cond, t=t)
 
                 if self.rlbuffer.total > self.rlbuffer.max_size and self.step % self.train_frep == 0:
                     self.finetune()

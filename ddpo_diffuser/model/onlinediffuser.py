@@ -125,11 +125,11 @@ class OnlineDiffuser:
         new_log_prob[torch.where(t == 0)] = 1.0
 
         ratio = torch.exp(new_log_prob - log_prob)
+        self.logger.write('advantage', advantage.mean(), self.train_step)
         advantage = (advantage - advantage.mean()) / advantage.std()
         loss1 = advantage * ratio
         loss2 = torch.clamp(ratio, 1 - self.clip, 1 + self.clip) * advantage
         loss = -torch.min(loss1, loss2).mean()
-        self.logger.write('advantage', advantage.mean(), self.train_step)
         self.logger.write('ratio_loss', loss1.mean(), self.train_step)
         self.logger.write('clip_loss', loss2.mean(), self.train_step)
         self.logger.write('min_loss', loss, self.train_step)

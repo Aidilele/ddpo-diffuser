@@ -369,7 +369,19 @@ class GaussianInvDynDiffusion(nn.Module):
             constraints,
             skills,
         )
+        x_t = x[:, :-1, self.action_dim:]
+        a_t = x[:, :-1, : self.action_dim]
+        x_t_1 = x[:, 1:, self.action_dim:]
+        x_comb_t = torch.cat([x_t, x_t_1], dim=-1)
+        x_comb_t = x_comb_t.reshape(-1, 2 * self.observation_dim)
+        a_t = a_t.reshape(-1, self.action_dim)
+
+        pred_a_t = self.inv_model(x_comb_t)
+        inv_loss = F.mse_loss(pred_a_t, a_t)
+        loss = (1 / 2) * (diffuse_loss + inv_loss)
         info['loss_diffuser'] = diffuse_loss
+        info['loss_inv'] = inv_loss
+        info['loss_total'] = loss
 
         return diffuse_loss, info
 
@@ -414,8 +426,8 @@ class GaussianInvDynDiffusion(nn.Module):
 
         device = self.betas.device
         batch_size = obs.shape[0]
-        shape = [batch_size, self.horizon, self.observation_dim + self.action_dim]
-        history = torch.cat([action, obs], dim=-1)
+        shape = [batch_size, self.horizon, self.observation_dim]
+        history = torch.cat([obs], dim=-1)
         x = 0.5 * torch.randn(shape, device=device)
         x = history_cover(x, history, self.action_dim, self.history_lenght)
         diffusion = [x]

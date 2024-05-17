@@ -175,10 +175,10 @@ def history_cover(
         history_length: int,
 ) -> torch.Tensor:
     """Update observation history queue."""
-    # history_length = history.shape[-2]
-    # x[:, :history_length - 1, :] = history[:, :-1, :].clone()
-    # x[:, history_length-1, action_dim:] = history[:, -1, action_dim:].clone()
-    x[:, :history_length, action_dim:] = history.clone()
+    history_length = history.shape[-2]
+    x[:, :history_length - 1, :] = history[:, :-1, :].clone()
+    x[:, history_length-1, action_dim:] = history[:, -1, action_dim:].clone()
+    # x[:, :history_length, action_dim:] = history.clone()
     return x
 
 

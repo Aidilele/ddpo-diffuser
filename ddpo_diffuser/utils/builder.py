@@ -82,12 +82,14 @@ def build_noise_model(config, env):
 
 def build_diffuser(config, noise_model, env):
     obs_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
+    action_dim = 0
+    true_action_dim = env.action_space.shape[0]
     diffuser = GaussianInvDynDiffusion(
         model=noise_model,
         horizon=config['defaults']['algo_cfgs']['horizon'],
         observation_dim=obs_dim,
         action_dim=action_dim,
+        true_action_dim=true_action_dim,
         n_timesteps=config['defaults']['algo_cfgs']['n_diffusion_steps'],
         clip_denoised=config['defaults']['model_cfgs']['diffuser_model']['clip_denoised'],
         predict_epsilon=config['defaults']['model_cfgs']['diffuser_model']['predict_epsilon'],

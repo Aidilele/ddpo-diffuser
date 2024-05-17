@@ -32,6 +32,7 @@ class GaussianInvDynDiffusion(nn.Module):
             horizon: int,
             observation_dim: int,
             action_dim: int,
+            true_action_dim: int,
             n_timesteps: int = 1000,
             clip_denoised: float = False,
             predict_epsilon: float = True,
@@ -64,7 +65,7 @@ class GaussianInvDynDiffusion(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.Tanh(),
-            nn.Linear(hidden_dim, self.action_dim),
+            nn.Linear(hidden_dim, true_action_dim),
         )
         betas = cosine_beta_schedule(n_timesteps)
         alphas = 1.0 - betas
@@ -426,8 +427,8 @@ class GaussianInvDynDiffusion(nn.Module):
 
         device = self.betas.device
         batch_size = obs.shape[0]
-        shape = [batch_size, self.horizon, self.observation_dim]
-        history = torch.cat([obs], dim=-1)
+        shape = [batch_size, self.horizon, self.observation_dim + self.action_dim]
+        history = torch.cat([action, obs], dim=-1)
         x = 0.5 * torch.randn(shape, device=device)
         x = history_cover(x, history, self.action_dim, self.history_lenght)
         diffusion = [x]

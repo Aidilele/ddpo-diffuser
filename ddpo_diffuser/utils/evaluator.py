@@ -47,7 +47,7 @@ class Evaluator:
         return np.stack(action_queue, axis=-2).astype(np.float32)
 
     def multi_pred_implement(self, pred_queue, obs_history, action_history, frames, ep_reward, step,
-                             label='state_action'):
+                             label='state_only'):
         if label == "state_action":
             for pred_step in range(self.multi_step_pred):
                 pred_action = pred_queue[:, pred_step, :self.action_dim]
@@ -64,12 +64,24 @@ class Evaluator:
                 obs = self.dataset.normalizer.normalize(obs)
                 action = torch.tensor(action, dtype=torch.float32, device=self.device)
 
-        elif label == 'state_only':
+        else:
             obs = pred_queue[:, 0]
             for pred_step in range(self.multi_step_pred):
                 next_obs = pred_queue[:, pred_step + 1]
                 obs_comb = torch.cat(obs, next_obs, dim=-1)
-            pass
+                pred_action = self.model.inv_model(obs_comb)
+                action = pred_action.detach().cpu().numpy()
+                next_obs, reward, terminal, _ = self.env.step(action)
+                action = self.action_history_queue(action, action_history)
+                next_obs = self.obs_history_queue(next_obs, obs_history)
+                frames.append(self.env.render(mode="rgb_array"))
+                ep_reward += reward
+                step += 1
+                if terminal.all():
+                    break
+                obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
+                obs = self.dataset.normalizer.normalize(obs)
+                action = torch.tensor(action, dtype=torch.float32, device=self.device)
 
         return obs, action, ep_reward, step, terminal
 

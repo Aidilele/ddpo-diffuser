@@ -59,7 +59,13 @@ class GaussianInvDynDiffusion(nn.Module):
 
         self.returns_condition = returns_condition
         self.condition_guidance_w = condition_guidance_w
-
+        self.inv_model = nn.Sequential(
+            nn.Linear(2 * self.observation_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Tanh(),
+            nn.Linear(hidden_dim, self.action_dim),
+        )
         betas = cosine_beta_schedule(n_timesteps)
         alphas = 1.0 - betas
         alphas_cumprod = torch.cumprod(alphas, axis=0)
@@ -408,7 +414,7 @@ class GaussianInvDynDiffusion(nn.Module):
 
         device = self.betas.device
         batch_size = obs.shape[0]
-        shape = [batch_size, self.horizon, self.observation_dim+self.action_dim]
+        shape = [batch_size, self.horizon, self.observation_dim + self.action_dim]
         history = torch.cat([action, obs], dim=-1)
         x = 0.5 * torch.randn(shape, device=device)
         x = history_cover(x, history, self.action_dim, self.history_lenght)
@@ -419,7 +425,7 @@ class GaussianInvDynDiffusion(nn.Module):
 
         for i in reversed(range(self.n_timesteps)):
             timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
-            x, model_mean, model_variance = self.single_step_diffusion(x, history,timesteps, c)
+            x, model_mean, model_variance = self.single_step_diffusion(x, history, timesteps, c)
             x = history_cover(x, history, self.action_dim, self.history_lenght)
             diffusion.append(x)
             mean.append(model_mean)

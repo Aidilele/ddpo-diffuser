@@ -28,6 +28,7 @@ class DiffuserTrainer(object):
     def __init__(self,
                  diffuser_model,
                  dataset,
+                 logger,
                  total_steps,
                  ema_decay=0.995,
                  train_lr=2e-5,
@@ -45,6 +46,7 @@ class DiffuserTrainer(object):
         self.model = diffuser_model
         self.ema = EMA(ema_decay)
         self.ema_model = copy.deepcopy(self.model)
+        self.logger = logger
         self.total_steps = total_steps
         self.update_ema_every = update_ema_every
         self.step_start_ema = step_start_ema
@@ -87,6 +89,7 @@ class DiffuserTrainer(object):
                 loss = loss / self.gradient_accumulate_every
                 loss.backward()
             self.optimizer.step()
+            self.logger.write('loss/diffuser', loss, step)
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()

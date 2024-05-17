@@ -5,13 +5,16 @@ from ddpo_diffuser.utils.builder import (
     build_online_diffuser,
     build_dataset,
     build_config,
-    build_rlbuffer
+    build_rlbuffer,
+    build_logger
 )
+
 
 def finetune():
     config_path = "C:\Project\ddpo-diffuser\ddpo_diffuser/runs/2024-5-16-14-53-19"
     config = build_config(config_path=config_path)
     env = build_env(config=config)
+    logger = build_logger(config=config, experiment_label='finetune')
     dataset = build_dataset(config=config)
     noise_model = build_noise_model(config=config, env=env)
     diffuser = build_diffuser(config=config, noise_model=noise_model, env=env)
@@ -20,7 +23,8 @@ def finetune():
                                             diffuser_model=diffuser,
                                             env=env,
                                             dataset=dataset,
-                                            rlbuffer=rlbuffer)
+                                            rlbuffer=rlbuffer,
+                                            logger=logger)
     online_diffuser.online_training()
 
 

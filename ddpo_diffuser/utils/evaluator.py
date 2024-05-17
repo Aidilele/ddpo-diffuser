@@ -15,7 +15,6 @@ class Evaluator:
                  evaluate_episode=10,
                  episode_max_length=1000,
                  obs_history_length=1,
-                 multi_step_pred=20
                  ):
         self.config = config
         self.model = diffuser_model
@@ -25,8 +24,8 @@ class Evaluator:
         self.render = render
         self.evalutate_episode = evaluate_episode
         self.episode_max_length = episode_max_length
-        self.obs_history_length = obs_history_length
-        self.multi_step_pred = multi_step_pred
+        self.obs_history_length = config['defaults']['train_cfgs']['obs_history_length']
+        self.multi_step_pred = config['defaults']['evaluate_cfgs']['multi_step_pred']
         self.bucket = config['defaults']['logger_cfgs']['log_dir']
         self.model.eval()
         self.ema_model = self.model
@@ -95,7 +94,7 @@ class Evaluator:
 
     def render_frames(self, frames, episode, ep_reward):
         length = len(frames)
-        batch_size=len(frames[0])
+        batch_size = len(frames[0])
         height, width, tunnel = frames[0][0].shape
         video_path = os.path.join(self.bucket, 'video')
         if not os.path.exists(video_path):

@@ -8,6 +8,7 @@ from ddpo_diffuser.utils.ReadFiles import load_yaml
 from ddpo_diffuser.dataset.rlbuffer import RLBuffer
 from ddpo_diffuser.env.environment import ParallelEnv
 from ddpo_diffuser.model.dit_model import DiT1d
+from ddpo_diffuser.utils.logger import Logger
 import torch
 import gym
 import time
@@ -47,13 +48,18 @@ def build_config(config_path=None):
     return config
 
 
+def build_logger(config, experiment_label):
+    logger = Logger(config=config, experiment_label=experiment_label)
+    return logger
+
+
 def build_noise_model(config, env):
     obs_dim = env.observation_space.shape[0]
-    action_dim=env.action_space.shape[0]
+    action_dim = env.action_space.shape[0]
     if config['defaults']['algo_cfgs']['noise_model'] == 'TemporalUnet':
         noise_model = TemporalUnet(
             horizon=config['defaults']['algo_cfgs']['horizon'],
-            transition_dim=obs_dim+action_dim,
+            transition_dim=obs_dim + action_dim,
             dim=config['defaults']['model_cfgs']['temporalU_model']['dim'],
             dim_mults=config['defaults']['model_cfgs']['temporalU_model']['dim_mults'],
             returns_condition=config['defaults']['dataset_cfgs']['include_returns'],
@@ -62,9 +68,9 @@ def build_noise_model(config, env):
         )
     elif config['defaults']['algo_cfgs']['noise_model'] == 'DiT':
         noise_model = DiT1d(
-            x_dim=obs_dim+action_dim,
+            x_dim=obs_dim + action_dim,
             action_dim=action_dim,
-            cond_dim= config['defaults']['model_cfgs']['DiT']["cond_dim"],
+            cond_dim=config['defaults']['model_cfgs']['DiT']["cond_dim"],
             hidden_dim=config['defaults']['model_cfgs']['DiT']['hidden_dim'],
             n_heads=config['defaults']['model_cfgs']['DiT']['n_heads'],
             depth=config['defaults']['model_cfgs']['DiT']['depth'],
@@ -108,7 +114,7 @@ def build_dataset(config):
 
 
 def build_rlbuffer(config, env):
-    x_dim = env.observation_space.shape[0]+env.action_space.shape[0]
+    x_dim = env.observation_space.shape[0] + env.action_space.shape[0]
     rlbuffer = RLBuffer(
         config=config,
         x_dim=x_dim
@@ -116,9 +122,10 @@ def build_rlbuffer(config, env):
     return rlbuffer
 
 
-def build_trainer(config, diffuser_model, dataset):
+def build_trainer(config, diffuser_model, dataset, logger):
     trainer = DiffuserTrainer(diffuser_model=diffuser_model,
                               dataset=dataset,
+                              logger=logger,
                               total_steps=config['defaults']['train_cfgs']['total_steps'],
                               train_lr=config['defaults']['train_cfgs']['lr'],
                               gradient_accumulate_every=config['defaults']['train_cfgs']['gradient_accumulate_every'],
@@ -140,12 +147,13 @@ def build_evaluator(config, diffuser_model, env, dataset):
     return evaluator
 
 
-def build_online_diffuser(config, diffuser_model, env, dataset, rlbuffer):
+def build_online_diffuser(config, diffuser_model, env, dataset, rlbuffer, logger):
     online_diffuser = OnlineDiffuser(
         config=config,
         env=env,
         diffuser=diffuser_model,
         dataset=dataset,
-        rlbuffer=rlbuffer
+        rlbuffer=rlbuffer,
+        logger=logger
     )
     return online_diffuser

@@ -33,12 +33,14 @@ class OnlineDiffuser:
                  dataset,
                  diffuser: GaussianInvDynDiffusion,
                  rlbuffer,
+                 logger,
                  reward_model=None):
         self.env = env
         self.obs_dim = self.env.observation_space.shape[0]
         self.action_dim = self.env.action_space.shape[0]
         self.dataset = dataset
         self.rlbuffer = rlbuffer
+        self.logger = logger
         self.device = torch.device(config['defaults']['train_cfgs']['device'])
         self.bucket = config['defaults']['logger_cfgs']['log_dir']
         self.diffuser = diffuser.to(self.device)
@@ -51,16 +53,18 @@ class OnlineDiffuser:
         self.optimizer = torch.optim.Adam(self.diffuser.parameters(), lr=config['defaults']['train_cfgs']['lr'])
         self.reward_model = reward_model
 
+        self.save_freq = config['defaults']['logger_cfgs']['save_model_freq']
+        self.horizon = config['defaults']['algo_cfgs']['horizon']
+        self.obs_history_length = config['defaults']['train_cfgs']['obs_history_length']
+        self.multi_step_pred = config['defaults']['evaluate_cfgs']['multi_step_pred']
+
         self.clip = 0.2
-        self.horizon = 64
-        self.obs_history_length = 1
-        self.multi_step_pred = 10
         self.step = 0
-        self.save_freq = 100
         self.update_ema_every = 2
         self.step_start_ema = 100
-        self.train_frep = 8
-        self.save_checkpoints = True
+        self.train_frep = self.rlbuffer.max_size
+        self.save_checkpoints = bool(self.save_freq)
+        self.train_step = 0
 
     def reset_parameters(self):
         self.old_diffuser.load_state_dict(self.diffuser.state_dict())
@@ -123,10 +127,14 @@ class OnlineDiffuser:
         loss1 = advantage * ratio
         loss2 = torch.clamp(ratio, 1 - self.clip, 1 + self.clip) * advantage
         loss = -torch.min(loss1, loss2).mean()
-
+        self.logger.write('advantage', advantage.mean(), self.train_step)
+        self.logger.write('ratio_loss', loss1.mean(), self.train_step)
+        self.logger.write('clip_loss', loss2.mean(), self.train_step)
+        self.logger.write('min_loss', loss, self.train_step)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        self.train_step += 1
 
     def online_training(self):
 
@@ -169,7 +177,8 @@ class OnlineDiffuser:
                                     cond=cond, t=t)
 
                 if self.rlbuffer.total > self.rlbuffer.max_size and self.step % self.train_frep == 0:
-                    self.finetune()
+                    for _ in range(self.rlbuffer.max_size // self.rlbuffer.sample_batch_size):
+                        self.finetune()
                 if self.step % self.update_ema_every == 0:
                     self.step_ema()
                 if self.step % self.save_freq == 0:

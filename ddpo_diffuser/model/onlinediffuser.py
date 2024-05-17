@@ -35,6 +35,7 @@ class OnlineDiffuser:
                  rlbuffer,
                  logger,
                  reward_model=None):
+        self.config = config
         self.env = env
         self.obs_dim = self.env.observation_space.shape[0]
         self.action_dim = self.env.action_space.shape[0]
@@ -44,6 +45,7 @@ class OnlineDiffuser:
         self.device = torch.device(config['defaults']['train_cfgs']['device'])
         self.bucket = config['defaults']['logger_cfgs']['log_dir']
         self.diffuser = diffuser.to(self.device)
+        self.load()  # load pretrain model
         self.old_diffuser = copy.deepcopy(diffuser).to(self.device)
         self.old_diffuser.eval()
         self.ema = EMA(0.995)
@@ -203,3 +205,13 @@ class OnlineDiffuser:
             savepath = os.path.join(savepath, 'state.pt')
         torch.save(data, savepath)
         print(f'[ utils/training ] Saved model to {savepath}')
+
+    def load(self):
+        step = self.config['defaults']['evaluate_cfgs']['evaluate_model_index']
+        if step != None:
+            loadpath = os.path.join(self.bucket, f'checkpoint/state_{step}.pt')
+        else:
+            loadpath = os.path.join(self.bucket, f'checkpoint/state.pt')
+        data = torch.load(loadpath)
+        self.step = data['step']
+        self.diffuser.load_state_dict(data['model'])

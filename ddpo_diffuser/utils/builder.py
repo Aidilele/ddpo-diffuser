@@ -59,7 +59,7 @@ def build_noise_model(config, env):
     if config['defaults']['algo_cfgs']['noise_model'] == 'TemporalUnet':
         noise_model = TemporalUnet(
             horizon=config['defaults']['algo_cfgs']['horizon'],
-            transition_dim=obs_dim + action_dim,
+            transition_dim=obs_dim,
             dim=config['defaults']['model_cfgs']['temporalU_model']['dim'],
             dim_mults=config['defaults']['model_cfgs']['temporalU_model']['dim_mults'],
             returns_condition=config['defaults']['dataset_cfgs']['include_returns'],
@@ -68,7 +68,7 @@ def build_noise_model(config, env):
         )
     elif config['defaults']['algo_cfgs']['noise_model'] == 'DiT':
         noise_model = DiT1d(
-            x_dim=obs_dim + action_dim,
+            x_dim=obs_dim,
             action_dim=action_dim,
             cond_dim=config['defaults']['model_cfgs']['DiT']["cond_dim"],
             hidden_dim=config['defaults']['model_cfgs']['DiT']['hidden_dim'],
@@ -82,14 +82,12 @@ def build_noise_model(config, env):
 
 def build_diffuser(config, noise_model, env):
     obs_dim = env.observation_space.shape[0]
-    action_dim = 0
-    true_action_dim = env.action_space.shape[0]
+    action_dim = env.action_space.shape[0]
     diffuser = GaussianInvDynDiffusion(
         model=noise_model,
         horizon=config['defaults']['algo_cfgs']['horizon'],
         observation_dim=obs_dim,
         action_dim=action_dim,
-        true_action_dim=true_action_dim,
         n_timesteps=config['defaults']['algo_cfgs']['n_diffusion_steps'],
         clip_denoised=config['defaults']['model_cfgs']['diffuser_model']['clip_denoised'],
         predict_epsilon=config['defaults']['model_cfgs']['diffuser_model']['predict_epsilon'],
@@ -116,7 +114,7 @@ def build_dataset(config):
 
 
 def build_rlbuffer(config, env):
-    x_dim = env.observation_space.shape[0] + env.action_space.shape[0]
+    x_dim = env.observation_space.shape[0]
     rlbuffer = RLBuffer(
         config=config,
         x_dim=x_dim

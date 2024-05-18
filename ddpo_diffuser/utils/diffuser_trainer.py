@@ -89,7 +89,8 @@ class DiffuserTrainer(object):
                 loss = loss / self.gradient_accumulate_every
                 loss.backward()
             self.optimizer.step()
-            self.logger.write('loss/diffuser', loss, step)
+            self.logger.write('loss/diffuser', info['loss_diffuser'], step)
+            self.logger.write('loss/inv_model', info['loss_inv'], step)
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()

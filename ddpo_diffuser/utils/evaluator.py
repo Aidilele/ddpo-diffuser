@@ -46,69 +46,36 @@ class Evaluator:
             action_queue.__delitem__(0)
         return np.stack(action_queue, axis=-2).astype(np.float32)
 
-    def multi_pred_implement(self, pred_queue, obs_history, action_history, frames, ep_reward, step,
-                             label='state_only'):
-        if label == "state_action":
-            for pred_step in range(self.multi_step_pred):
-                pred_action = pred_queue[:, pred_step, :self.action_dim]
-                action = pred_action.detach().cpu().numpy()
-                next_obs, reward, terminal, _ = self.env.step(action)
-                action = self.action_history_queue(action, action_history)
-                next_obs = self.obs_history_queue(next_obs, obs_history)
-                frames.append(self.env.render(mode="rgb_array"))
-                ep_reward += reward
-                step += 1
-                if terminal.all():
-                    break
-                obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
-                obs = self.dataset.normalizer.normalize(obs)
-                action = torch.tensor(action, dtype=torch.float32, device=self.device)
-
-        else:
-            obs = pred_queue[:, 0]
-            for pred_step in range(self.multi_step_pred):
-                next_obs = pred_queue[:, pred_step + 1]
-                obs_comb = torch.cat(obs, next_obs, dim=-1)
-                pred_action = self.model.inv_model(obs_comb)
-                action = pred_action.detach().cpu().numpy()
-                next_obs, reward, terminal, _ = self.env.step(action)
-                action = self.action_history_queue(action, action_history)
-                next_obs = self.obs_history_queue(next_obs, obs_history)
-                frames.append(self.env.render(mode="rgb_array"))
-                ep_reward += reward
-                step += 1
-                if terminal.all():
-                    break
-                obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
-                obs = self.dataset.normalizer.normalize(obs)
-                action = torch.tensor(action, dtype=torch.float32, device=self.device)
-
-        return obs, action, ep_reward, step, terminal
 
     def eval(self):
         returns = 0.8 * torch.ones((self.env.parallel_num, 1), device=self.device)
         for episode in range(self.evalutate_episode):
             obs_history = []
-            action_history = [self.env.sample_random_action()]
             obs, terminal = self.env.reset()
             obs = self.obs_history_queue(obs, obs_history)
-            action = self.action_history_queue(self.env.sample_random_action(), action_history)
             self.env.render()
             ep_reward = 0
             obs = torch.from_numpy(obs).to(self.device)
             obs = self.dataset.normalizer.normalize(obs)
-            action = torch.from_numpy(action).to(self.device)
             frames = []
             step = 0
             while (step < self.episode_max_length) and (not terminal.all()):
-                x = self.model.conditional_sample(obs, action, returns=returns)
+                x = self.model.conditional_sample(obs, returns=returns)
                 pred_queue = x[:, self.obs_history_length - 1:]
-                obs, action, ep_reward, step, terminal = self.multi_pred_implement(pred_queue,
-                                                                                   obs_history,
-                                                                                   action_history,
-                                                                                   frames,
-                                                                                   ep_reward,
-                                                                                   step)
+                for pred_step in range(self.multi_step_pred):
+                    next_obs = pred_queue[:, pred_step + 1]
+                    obs_comb = torch.cat([obs[:, -1, :], next_obs], dim=-1)
+                    pred_action = self.model.inv_model(obs_comb)
+                    action = pred_action.detach().cpu().numpy()
+                    next_obs, reward, terminal, _ = self.env.step(action)
+                    next_obs = self.obs_history_queue(next_obs, obs_history)
+                    frames.append(self.env.render(mode="rgb_array"))
+                    ep_reward += reward
+                    step += 1
+                    if terminal.all():
+                        break
+                    obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
+                    obs = self.dataset.normalizer.normalize(obs)
 
             self.render_frames(frames, episode, ep_reward)
             print('episode:', episode, '--> ep_reward:', ep_reward)

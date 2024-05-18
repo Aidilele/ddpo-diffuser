@@ -171,7 +171,7 @@ class DiT1d(nn.Module):
         super().__init__()
         self.x_dim, self.action_dim, self.cond_dim, self.hidden_dim, self.n_heads, self.depth = x_dim, action_dim, cond_dim, hidden_dim, n_heads, depth
         self.x_proj = nn.Linear(x_dim, hidden_dim)
-        self.obs_emb = ObsAttentionEmbedding(x_dim - action_dim, hidden_dim, n_heads, dropout)
+        self.obs_emb = ObsAttentionEmbedding(x_dim, hidden_dim, n_heads, dropout)
         self.t_emb = SinPosTimeEmbedding(hidden_dim)
         self.mask_dist = Bernoulli(probs=1 - condition_dropout)
         self.attr_proj = CondEmbedding(cond_dim, hidden_dim)
@@ -232,7 +232,7 @@ class DiT1d(nn.Module):
         x = self.x_proj(x) + self.pos_emb_cache[None,]
         t = self.t_emb(t)
 
-        obs_emb = self.obs_emb(obs[:, :, self.action_dim:])
+        obs_emb = self.obs_emb(obs)
         if returns is not None:
             emb = self.attr_proj(returns)
 

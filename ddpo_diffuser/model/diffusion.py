@@ -32,7 +32,6 @@ class GaussianInvDynDiffusion(nn.Module):
             horizon: int,
             observation_dim: int,
             action_dim: int,
-            true_action_dim: int,
             n_timesteps: int = 1000,
             clip_denoised: float = False,
             predict_epsilon: float = True,
@@ -65,7 +64,7 @@ class GaussianInvDynDiffusion(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.Tanh(),
-            nn.Linear(hidden_dim, true_action_dim),
+            nn.Linear(hidden_dim, action_dim),
         )
         betas = cosine_beta_schedule(n_timesteps)
         alphas = 1.0 - betas
@@ -113,7 +112,7 @@ class GaussianInvDynDiffusion(nn.Module):
     def get_loss_weights(self, discount: float) -> torch.Tensor:
         """Get loss weights for training model."""
         self.action_weight = 1
-        dim_weights = torch.ones(self.observation_dim + self.action_dim, dtype=torch.float32)
+        dim_weights = torch.ones(self.observation_dim, dtype=torch.float32)
 
         # decay loss with trajectory timestep: discount**t
         discounts = discount ** torch.arange(self.horizon, dtype=torch.float)
@@ -253,7 +252,7 @@ class GaussianInvDynDiffusion(nn.Module):
 
         batch_size = shape[0]
         x = 0.5 * torch.randn(shape, device=device)
-        x = history_cover(x, history, self.action_dim, self.history_lenght)
+        x = history_cover(x, history, 0, self.history_lenght)
 
         if return_diffusion:
             diffusion = [x]
@@ -264,7 +263,7 @@ class GaussianInvDynDiffusion(nn.Module):
         for i in reversed(range(self.n_timesteps)):
             timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
             x, model_mean, model_variance = self.p_sample(x, history, timesteps, returns, constraints, skills)
-            x = history_cover(x, history, self.action_dim, self.history_lenght)
+            x = history_cover(x, history, 0, self.history_lenght)
 
             # progress.update({'t': i})
 
@@ -283,8 +282,7 @@ class GaussianInvDynDiffusion(nn.Module):
     @torch.no_grad()
     def conditional_sample(
             self,
-            obs_history: torch.Tensor,
-            action_history: torch.Tensor,
+            history: torch.Tensor,
             returns: torch.Tensor = None,
             horizon: torch.Tensor = None,
             *args: tuple,
@@ -296,10 +294,9 @@ class GaussianInvDynDiffusion(nn.Module):
             p_sample value
 
         """
-        batch_size = len(obs_history)
+        batch_size = len(history)
         horizon = horizon or self.horizon
-        shape = (batch_size, horizon, self.observation_dim + self.action_dim)
-        history = torch.cat([action_history, obs_history], dim=-1)
+        shape = (batch_size, horizon, self.observation_dim)
 
         return self.p_sample_loop(shape, history, returns, *args, **kwargs)
 
@@ -337,11 +334,11 @@ class GaussianInvDynDiffusion(nn.Module):
         history = x_start[:, : self.history_lenght, :]
         noise = torch.randn_like(x_start)
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
-        x_noisy = history_cover(x_noisy, history, self.action_dim, self.history_lenght)
+        x_noisy = history_cover(x_noisy, history, 0, self.history_lenght)
         x_recon = self.model(x_noisy, obs=history, t=t, returns=returns, constraints=constraints, skills=skills)
 
         if not self.predict_epsilon:
-            x_recon = history_cover(x_recon, history, self.action_dim, self.history_lenght)
+            x_recon = history_cover(x_recon, history, 0, self.history_lenght)
 
         assert noise.shape == x_recon.shape
 
@@ -364,7 +361,7 @@ class GaussianInvDynDiffusion(nn.Module):
         batch_size = len(x)
         t = torch.randint(0, self.n_timesteps, (batch_size,), device=x.device).long()
         diffuse_loss, info = self.p_losses(
-            x,
+            x[:, :, self.action_dim:],
             t,
             returns,
             constraints,
@@ -423,14 +420,14 @@ class GaussianInvDynDiffusion(nn.Module):
         return x_pre, mean, model_variance
 
     @torch.no_grad()
-    def multi_steps_diffusion(self, obs, action, c):
+    def multi_steps_diffusion(self, history, c):
 
         device = self.betas.device
-        batch_size = obs.shape[0]
-        shape = [batch_size, self.horizon, self.observation_dim + self.action_dim]
-        history = torch.cat([action, obs], dim=-1)
+        batch_size = history.shape[0]
+        shape = [batch_size, self.horizon, self.observation_dim]
+
         x = 0.5 * torch.randn(shape, device=device)
-        x = history_cover(x, history, self.action_dim, self.history_lenght)
+        x = history_cover(x, history, 0, self.history_lenght)
         diffusion = [x]
         mean = []
         variance = []
@@ -439,7 +436,7 @@ class GaussianInvDynDiffusion(nn.Module):
         for i in reversed(range(self.n_timesteps)):
             timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
             x, model_mean, model_variance = self.single_step_diffusion(x, history, timesteps, c)
-            x = history_cover(x, history, self.action_dim, self.history_lenght)
+            x = history_cover(x, history, 0, self.history_lenght)
             diffusion.append(x)
             mean.append(model_mean)
             variance.append(model_variance)

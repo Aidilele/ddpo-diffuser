@@ -89,19 +89,16 @@ class OnlineDiffuser:
             action_queue.__delitem__(0)
         return np.stack(action_queue, axis=-2).astype(np.float32)
 
-    def rollout(self, obs, action, condition):
+    def rollout(self, history, condition):
         self.step += 1
-        sample, x_latent, mean, variance, t = self.old_diffuser.multi_steps_diffusion(obs, action, condition)
+        sample, x_latent, mean, variance, t = self.old_diffuser.multi_steps_diffusion(history, condition)
         state = x_latent[:, :-1, :, :]
         next_state = x_latent[:, 1:, :, :]
         batch_size, diffusion_steps, *_ = state.shape
         log_prob = torch.distributions.normal.Normal(mean, variance).log_prob(next_state).sum([-2, -1])
         log_prob[:, -1] = 1
-        # reward = torch.zeros((batch_size, diffusion_steps))
-        # reward[:, 0] = self.reward_model(sample, condition)
         reward = 0
         condition = condition.repeat(diffusion_steps, 1).view(batch_size, diffusion_steps, -1)
-        history = torch.cat([action, obs], dim=-1)
         history = history.repeat(diffusion_steps, 1, 1).view(batch_size, diffusion_steps, self.obs_history_length, -1)
         return sample, state, next_state, log_prob, reward, history, condition, t
 
@@ -143,33 +140,29 @@ class OnlineDiffuser:
         returns = 0.8 * torch.ones((self.env.parallel_num, 1), device=self.device)
         for episode in range(100000):
             obs_history = []
-            action_history = [self.env.sample_random_action()]
             obs, terminal = self.env.reset()
             obs = self.obs_history_queue(obs, obs_history)
-            action = self.action_history_queue(self.env.sample_random_action(), action_history)
-            obs_dim = obs.shape[-1]
             obs = torch.from_numpy(obs).to(self.device)
-            action = torch.from_numpy(action).to(self.device)
             batch_size, _, _ = obs.shape
             obs = self.dataset.normalizer.normalize(obs)
             step = 0
             while (step < 1000) and (not terminal.all()):
-                x, s, n_s, log_prob, _, history, cond, t = self.rollout(obs=obs, action=action, condition=returns)
-                pred_action_queue = x[:, self.obs_history_length - 1:]
+                x, s, n_s, log_prob, _, history, cond, t = self.rollout(history=obs, condition=returns)
                 ep_reward = []
+                pred_queue = x[:, self.obs_history_length - 1:]
                 for pred_step in range(self.multi_step_pred):
-                    pred_action = pred_action_queue[:, pred_step, :]
+                    next_obs = pred_queue[:, pred_step + 1]
+                    obs_comb = torch.cat([obs[:, -1, :], next_obs], dim=-1)
+                    pred_action = self.old_diffuser.inv_model(obs_comb)
                     action = pred_action.detach().cpu().numpy()
                     next_obs, reward, terminal, _ = self.env.step(action)
-                    action = self.action_history_queue(action, action_history)
                     next_obs = self.obs_history_queue(next_obs, obs_history)
                     ep_reward.append(reward)
                     step += 1
-                    if torch.tensor(terminal).all():
+                    if terminal.all():
                         break
                     obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
                     obs = self.dataset.normalizer.normalize(obs)
-                    action = torch.tensor(action, dtype=torch.float32, device=self.device)
                 reward = torch.tensor(ep_reward, device=self.device).T
                 reward = self.dataset.cal_return(reward)
                 advantages = self.cal_pred_traj_advantage(reward, cond)

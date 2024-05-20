@@ -12,7 +12,7 @@ class Evaluator:
                  dataset,
                  device='cuda',
                  render=False,
-                 evaluate_episode=10,
+                 evaluate_episode=5,
                  episode_max_length=1000,
                  ):
         self.config = config

@@ -381,7 +381,7 @@ class GaussianInvDynDiffusion(nn.Module):
         info['loss_inv'] = inv_loss
         info['loss_total'] = loss
 
-        return diffuse_loss, info
+        return loss, info
 
     def forward(self, *args: tuple, **kwargs: dict) -> torch.Tensor:
         """Diffusion model forward function."""

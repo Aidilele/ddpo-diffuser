@@ -52,6 +52,9 @@ class ParallelEnv(gym.Env):
 
     def render(self, mode='human'):
         results = []
-        for env in self.env_list:
-            results.append(env.render(mode=mode))
+        if mode == 'human':
+            self.env_list[0].render(mode)
+        else:
+            for env in self.env_list:
+                results.append(env.render(mode=mode))
         return results

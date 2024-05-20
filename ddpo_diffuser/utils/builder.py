@@ -142,7 +142,8 @@ def build_evaluator(config, diffuser_model, env, dataset):
         config=config,
         diffuser_model=diffuser_model,
         env=env,
-        dataset=dataset
+        dataset=dataset,
+
     )
     return evaluator
 

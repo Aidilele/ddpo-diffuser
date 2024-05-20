@@ -12,7 +12,7 @@ class Evaluator:
                  dataset,
                  device='cuda',
                  render=False,
-                 evaluate_episode=5,
+                 evaluate_episode=1,
                  episode_max_length=1000,
                  ):
         self.config = config
@@ -46,9 +46,9 @@ class Evaluator:
             action_queue.__delitem__(0)
         return np.stack(action_queue, axis=-2).astype(np.float32)
 
-
     def eval(self):
-        returns = 0.8 * torch.ones((self.env.parallel_num, 1), device=self.device)
+        returns = self.config['defaults']['evaluate_cfgs']['returns'] * torch.ones((self.env.parallel_num, 1),
+                                                                                   device=self.device)
         for episode in range(self.evalutate_episode):
             obs_history = []
             obs, terminal = self.env.reset()
@@ -72,13 +72,23 @@ class Evaluator:
                     frames.append(self.env.render(mode="rgb_array"))
                     ep_reward += reward
                     step += 1
-                    if terminal.all():
+                    if terminal.all() or step >= self.episode_max_length:
                         break
                     obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
                     obs = self.dataset.normalizer.normalize(obs)
 
             self.render_frames(frames, episode, ep_reward)
-            print('episode:', episode, '--> ep_reward:', ep_reward)
+            # print('-')
+            # print('episode:', episode, '--> ep_reward:', ep_reward)
+            print('-' * 40)
+            print('episode:{}\treturns:{}'.format(episode, self.config['defaults']['evaluate_cfgs']['returns']))
+            for i in range(len(ep_reward)):
+                print('\t{}-->{:.2f}'.format(i, ep_reward[i]))
+            print('mean:{:.2f}\nstd:{:.2f}\nmax:{:.2f}\nmin:{:.2f}'.format(np.array(ep_reward).mean(),
+                                                                           np.array(ep_reward).std(),
+                                                                           np.array(ep_reward).max(),
+                                                                           np.array(ep_reward).min()))
+            return ep_reward
 
     def load(self):
         step = self.config['defaults']['evaluate_cfgs']['evaluate_model_index']

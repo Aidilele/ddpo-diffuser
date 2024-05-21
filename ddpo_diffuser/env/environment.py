@@ -14,11 +14,11 @@ class ParallelEnv(gym.Env):
         self.action_space = self.env_list[0].action_space
         self.obs_dim = self.observation_space.shape[0]
         self.action_dim = self.action_space.shape[0]
-        self.terminal_mask = np.ones(self.parallel_num)
+        self.terminal_mask = np.zeros(self.parallel_num, dtype=np.bool8)
 
     def reset(self, **kwargs):
         results = []
-        self.terminal_mask = np.ones(self.parallel_num)
+        self.terminal_mask = np.zeros(self.parallel_num, dtype=np.bool8)
         for env in self.env_list:
             result = env.reset(**kwargs)
             results.append(result)

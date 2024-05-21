@@ -52,7 +52,7 @@ class OnlineDiffuser:
         self.n_diffusion_steps = config['defaults']['algo_cfgs']['n_diffusion_steps']
         self.r_discounts = config['defaults']['algo_cfgs']['gamma'] ** (
             torch.arange(self.n_diffusion_steps - 1, -1, -1)).to(self.device)
-        self.optimizer = torch.optim.Adam(self.diffuser.parameters(), lr=config['defaults']['train_cfgs']['lr'])
+        self.optimizer = torch.optim.Adam(self.diffuser.model.final_layer.parameters(), lr=config['defaults']['train_cfgs']['lr'])
         self.reward_model = reward_model
 
         self.save_freq = config['defaults']['logger_cfgs']['save_model_freq']

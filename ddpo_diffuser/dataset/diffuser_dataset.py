@@ -49,17 +49,18 @@ class DeciDiffuserDataset:
         # Normalize Returns
         self.obs = self.normalizer.normalize(self.obs)
 
-        self.reward_normalizer = MaxMinNormalizer(self.reward.view(-1, 1))
+        self.reward_normalizer = GaussianNormalizer(self.reward.view(-1, 1))
         self.reward = self.reward_normalizer.normalize(self.reward.view(-1, 1))
         self.discounts = (self.discount ** torch.arange(self.horizon)).to(device)
-        self.return_max = (self.reward.max() * self.discounts).sum()
+        self.return_max = (2 * self.discounts)
 
         # return_scale = self.returns.max() - min
         # self.norm_returns = ((self.returns - min) / return_scale) * 2 - 1
 
     def get_returns(self, indices: torch.Tensor) -> torch.Tensor:
         """Get returns tensor for training."""
-        returns = ((self.reward[indices].view(-1, self.horizon) * self.discounts).sum(dim=-1) / self.return_max).view(
+        returns = ((self.reward[indices].view(-1, self.horizon) * self.discounts).sum(
+            dim=-1) / self.return_max.sum()).view(
             -1,
             1)
         # return self.norm_returns[indices].view(-1, 1)
@@ -69,7 +70,7 @@ class DeciDiffuserDataset:
 
     def cal_return(self, rewards):
         length = rewards.shape[-1]
-        norm_rewards=self.reward_normalizer.normalize(rewards)
+        norm_rewards = self.reward_normalizer.normalize(rewards)
         returns = ((norm_rewards.view(-1, length) * self.discounts[:length]).sum(dim=-1) / self.return_max).view(-1, 1)
         return returns
 

@@ -8,7 +8,7 @@ from ddpo_diffuser.utils.builder import (
 
 
 def evaluate():
-    config_path = "C:\Project\ddpo-diffuser\ddpo_diffuser/runs/2024-5-20-12-43-39"
+    config_path = "C:\Project\ddpo-diffuser\ddpo_diffuser/runs/2024-5-21-16-37-58"
     config = build_config(config_path=config_path)
     env = build_env(config=config)
     dataset = build_dataset(config=config)

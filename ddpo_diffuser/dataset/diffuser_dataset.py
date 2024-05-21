@@ -48,7 +48,7 @@ class DeciDiffuserDataset:
         self.normalizer = GaussianNormalizer(self.obs)
         # Normalize Returns
         self.obs = self.normalizer.normalize(self.obs)
-
+        self.best_traj_returns=self.reward.view(-1,self.episode_length).sum(-1).max()
         self.reward_normalizer = GaussianNormalizer(self.reward.view(-1, 1))
         self.reward = self.reward_normalizer.normalize(self.reward.view(-1, 1))
         self.discounts = (self.discount ** torch.arange(self.horizon)).to(device)

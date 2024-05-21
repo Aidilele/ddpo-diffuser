@@ -80,9 +80,11 @@ class Evaluator:
             self.render_frames(frames, episode, ep_reward)
             # print('-')
             # print('episode:', episode, '--> ep_reward:', ep_reward)
+
             print('-' * 40)
             print('episode:{}\treturns:{}'.format(episode, self.config['defaults']['evaluate_cfgs']['returns']))
-            for i in range(len(ep_reward)):
+            sort_index = np.array(ep_reward).argsort().tolist()
+            for i in sort_index:
                 print('\t{}-->{:.2f}'.format(i, ep_reward[i]))
             print('mean:{:.2f}\nstd:{:.2f}\nmax:{:.2f}\nmin:{:.2f}'.format(np.array(ep_reward).mean(),
                                                                            np.array(ep_reward).std(),

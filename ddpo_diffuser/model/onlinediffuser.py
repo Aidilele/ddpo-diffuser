@@ -1,3 +1,5 @@
+import random
+
 import torch
 from ddpo_diffuser.model.diffusion import GaussianInvDynDiffusion
 import copy
@@ -52,7 +54,8 @@ class OnlineDiffuser:
         self.n_diffusion_steps = config['defaults']['algo_cfgs']['n_diffusion_steps']
         self.r_discounts = config['defaults']['algo_cfgs']['gamma'] ** (
             torch.arange(self.n_diffusion_steps - 1, -1, -1)).to(self.device)
-        self.optimizer = torch.optim.Adam(self.diffuser.model.final_layer.parameters(), lr=config['defaults']['train_cfgs']['lr'])
+        self.optimizer = torch.optim.Adam(self.diffuser.model.final_layer.parameters(),
+                                          lr=config['defaults']['train_cfgs']['lr'])
         self.reward_model = reward_model
 
         self.save_freq = config['defaults']['logger_cfgs']['save_model_freq']
@@ -60,6 +63,7 @@ class OnlineDiffuser:
         self.obs_history_length = config['defaults']['train_cfgs']['obs_history_length']
         self.multi_step_pred = config['defaults']['evaluate_cfgs']['multi_step_pred']
 
+        self.episode_max_length = 1000
         self.clip = 0.2
         self.step = 0
         self.update_ema_every = 2
@@ -102,9 +106,7 @@ class OnlineDiffuser:
         history = history.repeat(diffusion_steps, 1, 1).view(batch_size, diffusion_steps, self.obs_history_length, -1)
         return sample, state, next_state, log_prob, reward, history, condition, t
 
-    def cal_pred_traj_advantage(self, reward, target_reward):
-        batch_size, n_diffusion_steps, _ = target_reward.shape
-        ep_reward = reward
+    def cal_pred_traj_advantage(self, ep_reward):
         advantages = ep_reward * self.r_discounts
         return advantages
 
@@ -135,9 +137,14 @@ class OnlineDiffuser:
         self.optimizer.step()
         self.train_step += 1
 
+    def cal_reward(self, curr_cond, target_cond):
+        curr_cond = curr_cond.view(-1, 1)
+        punish = -(curr_cond - target_cond) ** 2
+        punish[torch.where(torch.abs(curr_cond - target_cond) < 0.1)] += 1
+        return punish
+
     def online_training(self):
 
-        returns = 0.8 * torch.ones((self.env.parallel_num, 1), device=self.device)
         for episode in range(100000):
             obs_history = []
             obs, terminal = self.env.reset()
@@ -146,9 +153,24 @@ class OnlineDiffuser:
             batch_size, _, _ = obs.shape
             obs = self.dataset.normalizer.normalize(obs)
             step = 0
-            while (step < 1000) and (not terminal.all()):
+
+            returns = random.uniform(0,1) * torch.ones((self.env.parallel_num, 1), device=self.device)
+            ep_reward = []
+            ep_s = []
+            ep_ns = []
+            ep_log_prob = []
+            ep_history = []
+            ep_cond = []
+            ep_t = []
+
+            while (step < self.episode_max_length) and (not terminal.all()):
                 x, s, n_s, log_prob, _, history, cond, t = self.rollout(history=obs, condition=returns)
-                ep_reward = []
+                ep_s.append(s)
+                ep_ns.append(n_s)
+                ep_log_prob.append(log_prob)
+                ep_history.append(history)
+                ep_cond.append(cond)
+                ep_t.append(t)
                 pred_queue = x[:, self.obs_history_length - 1:]
                 for pred_step in range(self.multi_step_pred):
                     next_obs = pred_queue[:, pred_step + 1]
@@ -163,11 +185,12 @@ class OnlineDiffuser:
                         break
                     obs = torch.tensor(next_obs, dtype=torch.float32, device=self.device)
                     obs = self.dataset.normalizer.normalize(obs)
-                reward = torch.tensor(ep_reward, device=self.device).T
-                reward = self.dataset.cal_return(reward)
-                advantages = self.cal_pred_traj_advantage(reward, cond)
-                self.rlbuffer.store(state=s, n_state=n_s, log_prob=log_prob, advantage=advantages, history=history,
-                                    cond=cond, t=t)
+
+                # reward = torch.tensor(ep_reward, device=self.device).T
+                # reward = self.dataset.cal_return(reward)
+                # advantages = self.cal_pred_traj_advantage(reward, cond)
+                # self.rlbuffer.store(state=s, n_state=n_s, log_prob=log_prob, advantage=advantages, history=history,
+                #                     cond=cond, t=t)
 
                 if self.rlbuffer.total > self.rlbuffer.max_size and self.step % self.train_frep == 0:
                     for _ in range(self.rlbuffer.max_size // self.rlbuffer.sample_batch_size):
@@ -176,6 +199,33 @@ class OnlineDiffuser:
                     self.step_ema()
                 if self.step % self.save_freq == 0:
                     self.save()
+
+            ep_reward = torch.tensor(np.array(ep_reward), device=self.device).T
+            ep_length = torch.zeros(len(ep_reward), dtype=torch.int64, device=self.device)
+            for index, each_epr in enumerate(ep_reward):
+                ep_length[index] = len(each_epr[torch.where(each_epr != 0)]) // self.multi_step_pred
+            ep_reward = ep_reward.sum(-1) / self.dataset.best_traj_returns
+            ep_reward = self.cal_reward(ep_reward, returns)
+            advantage = self.cal_pred_traj_advantage(ep_reward).repeat(len(ep_s), 1).view(len(ep_s), -1,
+                                                                                          self.n_diffusion_steps)
+            ep_s = torch.stack(ep_s)
+            ep_ns = torch.stack(ep_ns)
+            ep_log_prob = torch.stack(ep_log_prob)
+            ep_history = torch.stack(ep_history)
+            ep_cond = torch.stack(ep_cond)
+            ep_t = torch.stack(ep_t)
+            for index, length in enumerate(ep_length):
+                self.rlbuffer.store(
+                    state=ep_s[:length, index],
+                    n_state=ep_ns[:length, index],
+                    log_prob=ep_log_prob[:length, index],
+                    advantage=advantage[:length, index],
+                    history=ep_history[:length, index],
+                    cond=ep_cond[:length, index],
+                    t=ep_t[:length, index],
+                )
+
+        # self.dataset.cal_returns(ep_reward)
 
     def save(self):
         '''

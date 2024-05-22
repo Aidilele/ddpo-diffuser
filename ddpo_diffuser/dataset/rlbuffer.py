@@ -2,7 +2,7 @@ import torch
 
 
 class RLBuffer:
-    def __init__(self, config, x_dim, max_size=512, sample_batch_size=64):
+    def __init__(self, config, x_dim, max_size=1024, sample_batch_size=64):
         n_diffusion_steps = config['defaults']['algo_cfgs']['n_diffusion_steps']
         horizon = config['defaults']['algo_cfgs']['horizon']
         history_length = config['defaults']['train_cfgs']['obs_history_length']

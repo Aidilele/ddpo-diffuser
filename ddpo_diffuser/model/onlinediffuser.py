@@ -102,7 +102,7 @@ class OnlineDiffuser:
         log_prob = torch.distributions.normal.Normal(mean, variance).log_prob(next_state).sum([-2, -1])
         log_prob[:, -1] = 1
         reward = 0
-        condition = condition.repeat(diffusion_steps, 1).view(batch_size, diffusion_steps, -1)
+        condition = condition.repeat(1, diffusion_steps).view(batch_size, diffusion_steps, -1)
         history = history.repeat(diffusion_steps, 1, 1).view(batch_size, diffusion_steps, self.obs_history_length, -1)
         return sample, state, next_state, log_prob, reward, history, condition, t
 
@@ -125,7 +125,7 @@ class OnlineDiffuser:
 
         ratio = torch.exp(new_log_prob - log_prob)
         self.logger.write('advantage', advantage.mean(), self.train_step)
-        advantage = (advantage - advantage.mean()) / advantage.std()
+        # advantage = (advantage - advantage.mean()) / advantage.std()
         loss1 = advantage * ratio
         loss2 = torch.clamp(ratio, 1 - self.clip, 1 + self.clip) * advantage
         loss = -torch.min(loss1, loss2).mean()
@@ -153,8 +153,7 @@ class OnlineDiffuser:
             batch_size, _, _ = obs.shape
             obs = self.dataset.normalizer.normalize(obs)
             step = 0
-
-            returns = random.uniform(0,1) * torch.ones((self.env.parallel_num, 1), device=self.device)
+            returns = torch.rand((self.env.parallel_num, 1), device=self.device)
             ep_reward = []
             ep_s = []
             ep_ns = []

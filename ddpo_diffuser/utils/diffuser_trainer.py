@@ -26,6 +26,7 @@ class EMA():
 class DiffuserTrainer(object):
 
     def __init__(self,
+                 denoise_model,
                  diffuser_model,
                  dataset,
                  logger,
@@ -43,6 +44,7 @@ class DiffuserTrainer(object):
                  save_checkpoints=True,
                  ):
         super().__init__()
+        self.denoise_model = denoise_model
         self.model = diffuser_model
         self.ema = EMA(ema_decay)
         self.ema_model = copy.deepcopy(self.model)
@@ -85,7 +87,7 @@ class DiffuserTrainer(object):
             self.optimizer.zero_grad()
             for _ in range(self.gradient_accumulate_every):
                 batch_sample = self.dataset.sample()
-                loss, info = self.model.loss(*batch_sample)
+                loss, info = self.model.training_losses(*batch_sample)
                 loss = loss / self.gradient_accumulate_every
                 loss.backward()
             self.optimizer.step()

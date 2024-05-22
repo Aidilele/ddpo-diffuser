@@ -1,5 +1,3 @@
-import random
-
 import torch
 from ddpo_diffuser.model.diffusion import GaussianInvDynDiffusion
 import copy

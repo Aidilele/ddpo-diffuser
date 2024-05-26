@@ -10,7 +10,7 @@ from ddpo_diffuser.env.environment import ParallelEnv
 from ddpo_diffuser.model.dit_model import DiT1d
 from ddpo_diffuser.utils.logger import Logger
 from ddpo_diffuser.diffusion import gaussian_diffusion as gd
-from ddpo_diffuser.diffusion.respace import space_timesteps,SpacedDiffusion
+from ddpo_diffuser.diffusion.respace import space_timesteps, SpacedDiffusion
 import torch
 import time
 import json
@@ -101,15 +101,18 @@ def build_diffuser(config, noise_model, env):
         multi_step_pred=config['defaults']['evaluate_cfgs']['multi_step_pred'],
     )
     return diffuser
+
+
 def build_diffusion(
-    timestep_respacing,
-    noise_schedule="linear",
-    use_kl=False,
-    sigma_small=False,
-    predict_xstart=False,
-    learn_sigma=True,
-    rescale_learned_sigmas=False,
-    diffusion_steps=1000
+        denoise_model,
+        timestep_respacing,
+        noise_schedule="linear",
+        use_kl=False,
+        sigma_small=False,
+        predict_xstart=False,
+        learn_sigma=True,
+        rescale_learned_sigmas=False,
+        diffusion_steps=1000
 ):
     betas = gd.get_named_beta_schedule(noise_schedule, diffusion_steps)
     if use_kl:
@@ -121,6 +124,7 @@ def build_diffusion(
     if timestep_respacing is None or timestep_respacing == "":
         timestep_respacing = [diffusion_steps]
     return SpacedDiffusion(
+        denoise_model=denoise_model,
         use_timesteps=space_timesteps(diffusion_steps, timestep_respacing),
         betas=betas,
         model_mean_type=(
@@ -138,6 +142,7 @@ def build_diffusion(
         loss_type=loss_type
         # rescale_timesteps=rescale_timesteps,
     )
+
 
 def build_dataset(config):
     dataset = DeciDiffuserDataset(
@@ -159,17 +164,19 @@ def build_rlbuffer(config, env):
     return rlbuffer
 
 
-def build_trainer(config, diffuser_model, dataset, logger):
-    trainer = DiffuserTrainer(diffuser_model=diffuser_model,
-                              dataset=dataset,
-                              logger=logger,
-                              total_steps=config['defaults']['train_cfgs']['total_steps'],
-                              train_lr=config['defaults']['train_cfgs']['lr'],
-                              gradient_accumulate_every=config['defaults']['train_cfgs']['gradient_accumulate_every'],
-                              save_freq=config['defaults']['logger_cfgs']['save_model_freq'],
-                              train_device=config['defaults']['train_cfgs']['device'],
-                              bucket=config['defaults']['logger_cfgs']['log_dir']
-                              )
+def build_trainer(config, denoise_model, diffuser_model, dataset, logger):
+    trainer = DiffuserTrainer(
+        denoise_model=denoise_model,
+        diffuser_model=diffuser_model,
+        dataset=dataset,
+        logger=logger,
+        total_steps=config['defaults']['train_cfgs']['total_steps'],
+        train_lr=config['defaults']['train_cfgs']['lr'],
+        gradient_accumulate_every=config['defaults']['train_cfgs']['gradient_accumulate_every'],
+        save_freq=config['defaults']['logger_cfgs']['save_model_freq'],
+        train_device=config['defaults']['train_cfgs']['device'],
+        bucket=config['defaults']['logger_cfgs']['log_dir']
+    )
 
     return trainer
 

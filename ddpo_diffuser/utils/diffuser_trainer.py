@@ -87,6 +87,10 @@ class DiffuserTrainer(object):
             self.optimizer.zero_grad()
             for _ in range(self.gradient_accumulate_every):
                 batch_sample = self.dataset.sample()
+                x = batch_sample[0]
+                y = batch_sample[1]
+                model_kwargs = dict(y=y)
+                loss_dict = self.model.training_losses(self.denoise_model, x, model_kwargs=model_kwargs)
                 loss, info = self.model.training_losses(*batch_sample)
                 loss = loss / self.gradient_accumulate_every
                 loss.backward()

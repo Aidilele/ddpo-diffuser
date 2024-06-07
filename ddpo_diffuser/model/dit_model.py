@@ -153,7 +153,7 @@ class Finallayer1d(nn.Module):
     def __init__(self, hidden_size: int, out_dim: int):
         super().__init__()
         self.norm_final = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        self.linear = nn.Linear(hidden_size, out_dim)
+        self.linear = nn.Linear(hidden_size, 2 * out_dim)
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(), nn.Linear(3 * hidden_size, 2 * hidden_size))
 
@@ -246,4 +246,5 @@ class DiT1d(nn.Module):
         for block in self.blocks:
             x = block(x, t)
         x = self.final_layer(x, t)
+        x = torch.concatenate(x.split(self.x_dim, dim=-1), dim=1)
         return x

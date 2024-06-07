@@ -209,8 +209,8 @@ class DiT1d(nn.Module):
 
     def forward(self,
                 x: torch.Tensor,
-                obs: torch.Tensor,
                 t: torch.Tensor,
+                obs: torch.Tensor,
                 returns: Optional[torch.Tensor] = None,
                 constraints: Optional[torch.Tensor] = None,
                 skills: Optional[torch.Tensor] = None,

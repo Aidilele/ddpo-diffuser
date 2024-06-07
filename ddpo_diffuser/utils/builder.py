@@ -11,6 +11,7 @@ from ddpo_diffuser.model.dit_model import DiT1d
 from ddpo_diffuser.utils.logger import Logger
 from ddpo_diffuser.diffusion import gaussian_diffusion as gd
 from ddpo_diffuser.diffusion.respace import space_timesteps, SpacedDiffusion
+from ddpo_diffuser.model.inverse_dynamic import LinearInverseDynamic
 import torch
 import time
 import json
@@ -20,8 +21,9 @@ import os
 def build_env(config):
     env_name = config['defaults']['env_name']
     parallel_num = config['defaults']['env_parallel_num']
-
     env = ParallelEnv(env_name=env_name, parallel_num=parallel_num)
+    config['obs_dim'] = env.observation_space.shape[0]
+    config['action_dim'] = env.action_space.shape[0]
     return env
 
 
@@ -54,9 +56,15 @@ def build_logger(config, experiment_label):
     return logger
 
 
-def build_noise_model(config, env):
-    obs_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
+def build_inverse_dynamic_model(config):
+    return LinearInverseDynamic(observation_dim=config['obs_dim'],
+                                action_dim=config['action_dim'],
+                                hidden_dim=config['defaults']['model_cfgs']['diffuser_model']['hidden_dim'])
+
+
+def build_noise_model(config):
+    obs_dim = config['obs_dim']
+    action_dim = config['action_dim']
     if config['defaults']['algo_cfgs']['noise_model'] == 'TemporalUnet':
         noise_model = TemporalUnet(
             horizon=config['defaults']['algo_cfgs']['horizon'],
@@ -104,8 +112,10 @@ def build_diffuser(config, noise_model, env):
 
 
 def build_diffusion(
+        inv_model,
         denoise_model,
         timestep_respacing,
+        config,
         noise_schedule="linear",
         use_kl=False,
         sigma_small=False,
@@ -124,6 +134,8 @@ def build_diffusion(
     if timestep_respacing is None or timestep_respacing == "":
         timestep_respacing = [diffusion_steps]
     return SpacedDiffusion(
+        config=config,
+        inv_model=inv_model,
         denoise_model=denoise_model,
         use_timesteps=space_timesteps(diffusion_steps, timestep_respacing),
         betas=betas,

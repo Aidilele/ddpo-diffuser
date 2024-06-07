@@ -9,7 +9,7 @@ import math
 import numpy as np
 import torch as th
 import enum
-
+from ddpo_diffuser.model.helpers import history_cover
 from .diffusion_utils import discretized_gaussian_log_likelihood, normal_kl
 
 
@@ -153,17 +153,22 @@ class GaussianDiffusion:
     def __init__(
             self,
             *,
+            config,
             denoise_model,
+            inv_model,
             betas,
             model_mean_type,
             model_var_type,
             loss_type
     ):
         self.denoise_model = denoise_model
+        self.inv_model = inv_model
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
         self.loss_type = loss_type
-
+        self.history_length = config['defaults']['train_cfgs']['obs_history_length']
+        self.obs_dim = config['obs_dim']
+        self.action_dim = config['action_dim']
         # Use float64 for accuracy.
         betas = np.array(betas, dtype=np.float64)
         self.betas = betas
@@ -700,7 +705,7 @@ class GaussianDiffusion:
         output = th.where((t == 0), decoder_nll, kl)
         return {"output": output, "pred_xstart": out["pred_xstart"]}
 
-    def training_losses(self, model,x_start, model_kwargs=None, noise=None):
+    def training_losses(self, model, x_start, model_kwargs=None, noise=None):
         """
         Compute training losses for a single timestep.
         :param model: the model to evaluate loss on.
@@ -712,14 +717,18 @@ class GaussianDiffusion:
         :return: a dict with the key "loss" containing a tensor of shape [N].
                  Some mean or variance settings may also have other keys.
         """
+        action_t = x_start[:, :, :self.action_dim]
+        x_start = x_start[:, :, self.action_dim:]
+
         if model_kwargs is None:
             model_kwargs = {}
         if noise is None:
             noise = th.randn_like(x_start)
-
+        obs = x_start[:, : self.history_length, :]
+        model_kwargs['obs'] = obs
         t = th.randint(0, self.num_timesteps, (x_start.shape[0],), device=x_start.device)
         x_t = self.q_sample(x_start, t, noise=noise)
-
+        x_t = history_cover(x_t, obs, 0, self.history_length)
         terms = {}
 
         if self.loss_type == LossType.KL or self.loss_type == LossType.RESCALED_KL:

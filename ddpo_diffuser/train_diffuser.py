@@ -16,7 +16,8 @@ def train(config_path):
     dataset = build_dataset(config=config)
     noise_model = build_noise_model(config=config, env=env)
     diffuser = build_diffusion(denoise_model=noise_model, timestep_respacing='')
-    trainer = build_trainer(config=config, diffuser_model=diffuser, dataset=dataset, logger=logger)
+    trainer = build_trainer(config=config, denoise_model=noise_model, diffuser_model=diffuser, dataset=dataset,
+                            logger=logger)
     trainer.train()
 
 

@@ -56,7 +56,7 @@ class DiffuserTrainer(object):
         self.save_freq = save_freq
         self.gradient_accumulate_every = gradient_accumulate_every
         self.dataset = dataset
-        self.optimizer = torch.optim.Adam(diffuser_model.parameters(), lr=train_lr)
+        self.optimizer = torch.optim.Adam(denoise_model.parameters(), lr=train_lr)
         self.device = torch.device(train_device)
         self.model.to(self.device)
         self.ema_model.to(self.device)

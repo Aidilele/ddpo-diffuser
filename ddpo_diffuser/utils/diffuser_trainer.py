@@ -92,7 +92,8 @@ class DiffuserTrainer(object):
                 model_kwargs = dict(returns=returns)
                 loss_dict = self.diffuser.training_losses(model=self.denoise_model, x_start=x,
                                                           model_kwargs=model_kwargs)
-                loss, info = self.diffuser.training_losses(*batch_sample)
+                # loss, info = self.diffuser.training_losses(*batch_sample)
+                loss = loss_dict['loss']
                 loss = loss / self.gradient_accumulate_every
                 loss.backward()
             self.optimizer.step()

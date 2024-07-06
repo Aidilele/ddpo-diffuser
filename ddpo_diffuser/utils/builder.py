@@ -37,6 +37,7 @@ def build_config(config_path=None):
         time_info = time_info[:-1]
         bucket = './runs/' + time_info
         config['defaults']['logger_cfgs']['log_dir'] = bucket
+        config['branch'] = 'state_only'
         config_save = json.dumps(config, indent=4)
         if not os.path.exists(bucket):
             os.makedirs(bucket)

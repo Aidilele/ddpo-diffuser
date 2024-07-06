@@ -30,7 +30,7 @@ defaults:
     batch_size: 128
     steps_per_epoch: 1000
     horizon: 64
-    n_diffusion_steps: 10
+    n_diffusion_steps: 50
     noise_model: "DiT"
 
   logger_cfgs:
@@ -66,7 +66,7 @@ defaults:
     reward_normalize: False
   evaluate_cfgs:
     returns: 0.9
-    multi_step_pred: 20
+    multi_step_pred: 10
     evaluate_model_index: 80000
 
 

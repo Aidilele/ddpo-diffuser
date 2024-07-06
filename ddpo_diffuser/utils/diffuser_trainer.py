@@ -100,7 +100,7 @@ class DiffuserTrainer(object):
             # self.logger.write('loss/diffuser', loss_dict['loss'].mean(), step)
             self.logger.write('loss/vb', loss_dict['vb'].mean(), step)
             self.logger.write('loss/mse', loss_dict['mse'].mean(), step)
-            self.logger.write('loss/inv_model', loss_dict['inv'].mean(), step)
+            self.logger.write('loss/inv', loss_dict['inv'].mean(), step)
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()

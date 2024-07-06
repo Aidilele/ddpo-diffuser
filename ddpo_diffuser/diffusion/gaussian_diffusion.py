@@ -166,6 +166,7 @@ class GaussianDiffusion:
     ):
         self.denoise_model = denoise_model
         self.inv_model = inv_model
+
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
         self.loss_type = loss_type
@@ -720,9 +721,13 @@ class GaussianDiffusion:
         :return: a dict with the key "loss" containing a tensor of shape [N].
                  Some mean or variance settings may also have other keys.
         """
+        terms = {}
         action_t = x_start[:, :, :self.action_dim]
         x_start = x_start[:, :, self.action_dim:]
-
+        self.inv_model.to(x_start.device)
+        pred_action = self.inv_model(torch.concatenate([x_start[:, :-1], x_start[:, 1:]], dim=-1))
+        inv_loss = torch.nn.functional.mse_loss(pred_action, action_t[:, :-1])
+        terms['inv'] = inv_loss
         if model_kwargs is None:
             model_kwargs = {}
         if noise is None:
@@ -732,7 +737,6 @@ class GaussianDiffusion:
         t = th.randint(0, self.num_timesteps, (x_start.shape[0],), device=x_start.device)
         x_t = self.q_sample(x_start, t, noise=noise)
         x_t = history_cover(x_t, obs, 0, self.history_length)
-        terms = {}
 
         if self.loss_type == LossType.KL or self.loss_type == LossType.RESCALED_KL:
             terms["loss"] = self._vb_terms_bpd(
@@ -779,9 +783,9 @@ class GaussianDiffusion:
             assert model_output.shape == target.shape == x_start.shape
             terms["mse"] = mean_flat((target - model_output) ** 2)
             if "vb" in terms:
-                terms["loss"] = terms["mse"] + terms["vb"]
+                terms["loss"] = terms["mse"] + terms["vb"] + terms['inv']
             else:
-                terms["loss"] = terms["mse"]
+                terms["loss"] = terms["mse"] + terms['inv']
         else:
             raise NotImplementedError(self.loss_type)
 

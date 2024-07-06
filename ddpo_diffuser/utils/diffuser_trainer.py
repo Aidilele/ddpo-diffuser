@@ -93,12 +93,14 @@ class DiffuserTrainer(object):
                 loss_dict = self.diffuser.training_losses(model=self.denoise_model, x_start=x,
                                                           model_kwargs=model_kwargs)
                 # loss, info = self.diffuser.training_losses(*batch_sample)
-                loss = loss_dict['loss']
+                loss = loss_dict['loss'].mean()
                 loss = loss / self.gradient_accumulate_every
                 loss.backward()
             self.optimizer.step()
-            self.logger.write('loss/diffuser', loss_dict['loss'], step)
-            self.logger.write('loss/inv_model', loss_dict['loss_inv'], step)
+            # self.logger.write('loss/diffuser', loss_dict['loss'].mean(), step)
+            self.logger.write('loss/vb', loss_dict['vb'].mean(), step)
+            self.logger.write('loss/mse', loss_dict['mse'].mean(), step)
+            self.logger.write('loss/inv_model', loss_dict['inv'].mean(), step)
 
             if self.step % self.update_ema_every == 0:
                 self.step_ema()

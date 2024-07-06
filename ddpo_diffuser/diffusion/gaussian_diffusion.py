@@ -9,6 +9,9 @@ import math
 import numpy as np
 import torch as th
 import enum
+
+import torch.nn
+
 from ddpo_diffuser.model.helpers import history_cover
 from .diffusion_utils import discretized_gaussian_log_likelihood, normal_kl
 
